@@ -1,0 +1,6 @@
+{
+  "name": "Oficina Luthier - Gestão Mobile First",
+  "description": "App mobile-first para gestão de luthieria e oficina de instrumentos musicais com OS rápida, fotos da bancada, orçamentos, estoque e portal do cliente.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
