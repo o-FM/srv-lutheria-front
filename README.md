@@ -28,18 +28,18 @@ Aplicativo de gestão projetado especificamente para oficinas de lutheria (const
    - Linha do tempo com fotos de antes e depois.
    - Botão de **Aprovação de Orçamento em 1 toque** com feedback comemorativo.
 
-6. **Offline-First**:
-   - Persistência contínua com armazenamento local.
-   - Alternador no cabeçalho para simular perda de sinal e sincronização com fila de requisições.
+6. **Aparelho compartilhado**:
+   - Qualquer pessoa da equipe troca de usuário pelo menu do perfil, com o próprio e-mail e senha.
+   - Sem "manter conectado", a sessão encerra após 15 minutos sem uso.
 
 ---
 
-## 👥 Personas Disponíveis para Teste
+## 👥 Perfis
 
-Você pode alternar entre as 3 personas a qualquer momento no seletor no cabeçalho:
-1. **Luthier / Dono (Armando)**: Visão de bancada, avanço de status, controle de peças e financeiro.
-2. **Atendente / Balcão (Mariana)**: Abertura rápida de OS, contato via WhatsApp em 1 toque, check-in.
-3. **Cliente (Lucas Silveira)**: Portal simplificado de acompanhamento e aprovação de orçamento.
+O perfil vem da conta (API `srv-luthieria`): **Admin** e **Luthier** veem bancada, estoque,
+financeiro e configurações; **Atendente** cuida do balcão (clientes, abertura e entrega de OS).
+O admin cria as contas em *Mais → Config → Equipe*. O cliente não tem login: recebe o link
+`/acompanhar/<token>` para ver fotos, andamento e aprovar o orçamento.
 
 ---
 
@@ -49,7 +49,29 @@ Você pode alternar entre as 3 personas a qualquer momento no seletor no cabeça
 2. **Ordens de Serviço**: Lista e modo Kanban com filtros de status (`Recebido` → `Diagnóstico` → `Orçamento` → `Aguardando aprovação` → `Em execução` → `Pronto` → `Entregue`).
 3. **Clientes**: Cadastro, histórico de instrumentos e atalhos de ligação e WhatsApp em 1 toque.
 4. **Instrumentos**: Ficha técnica com tipo, marca, modelo, ano, calibre de cordas e afinação.
-5. **Estoque**: Peças, cordas, madeiras e insumos com leitor de código de barras/QR pela câmera e ajuste rápido (+1 / -1).
+5. **Estoque**: Peças, cordas, madeiras e insumos com cadastro de itens, leitor de código de barras/QR pela câmera (Chrome/Android) ou leitor USB, e ajuste rápido (+1 / -1).
 6. **Agenda**: Visualização de entregas e compromissos.
-7. **Financeiro**: Resumo mensal, formas de pagamento (Pix, cartão, dinheiro) e recibos.
-8. **Mensagens**: Gerador de textos prontos para WhatsApp.
+7. **Financeiro**: Recebido no mês, ticket médio, a receber e totais por forma de pagamento.
+8. **Mensagens**: Avisos automáticos pendentes de envio pelo WhatsApp e modelos de texto com o link do portal.
+9. **Config**: Catálogo de serviços (preços padrão) e equipe.
+
+---
+
+## 🛠️ Desenvolvimento
+
+```bash
+npm install
+npm run dev        # http://localhost:3000, /api -> http://localhost:8080 (API srv-luthieria)
+npm run build      # typecheck + build de produção em dist/
+```
+
+Suba a API com `docker compose up --build` no repositório `srv-lutheria` (ou
+`java -jar ...` no perfil dev). `API_PROXY_TARGET` muda o destino do proxy do Vite.
+
+## 🚀 Produção
+
+A imagem deste repositório (`Dockerfile`) é o **Caddy** servindo o build estático e
+encaminhando `/api/*` para a API no mesmo domínio, com HTTPS automático (Let's Encrypt) e
+cabeçalhos de segurança (`Caddyfile`). O workflow `Imagem Docker` publica
+`ghcr.io/o-fm/srv-lutheria-front` a cada push na `main`. O passo a passo do servidor está em
+`srv-lutheria/deploy/README.md`.
