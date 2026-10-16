@@ -38,6 +38,13 @@ export interface RegisterWorkshopRequest {
   owner: { name: string; email: string; password: string; cpf?: string; phone?: string };
 }
 
+/** Preferências de aparência salvas na conta (valores do ThemeContext; null = padrão). */
+export interface UserPreferencesDto {
+  themeMode: 'system' | 'light' | 'dark' | null;
+  themeAccent: 'ambar' | 'azul' | 'esmeralda' | 'violeta' | 'rosa' | 'petroleo' | null;
+  themeTone: 'quente' | 'frio' | 'ardosia' | null;
+}
+
 export interface UserDto {
   id: string;
   tenantId: string;
@@ -47,6 +54,7 @@ export interface UserDto {
   phone: string | null;
   profile: Profile;
   active: boolean;
+  preferences: UserPreferencesDto | null;
 }
 
 export interface CreateUserRequest {

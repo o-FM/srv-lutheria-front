@@ -1,6 +1,8 @@
 import React from 'react';
 import { Check, Monitor, Moon, Sun } from 'lucide-react';
 import { ACCENTS, TONES, ThemeMode, useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
+import { isApiMode } from '../../config/env';
 
 const MODES: { id: ThemeMode; label: string; icon: React.ElementType }[] = [
   { id: 'light', label: 'Claro', icon: Sun },
@@ -11,6 +13,7 @@ const MODES: { id: ThemeMode; label: string; icon: React.ElementType }[] = [
 /** Seletor de aparência: modo, cor de destaque e tom dos neutros (cores pré-definidas). */
 export const AppearanceSettings: React.FC = () => {
   const { mode, accent, tone, setMode, setAccent, setTone } = useTheme();
+  const { user } = useAuth();
 
   return (
     <div className="space-y-5">
@@ -77,6 +80,14 @@ export const AppearanceSettings: React.FC = () => {
           ))}
         </div>
       </fieldset>
+
+      {user && (
+        <p className="text-xs text-base-500">
+          {isApiMode
+            ? `Preferência de ${user.name.split(' ')[0]}: salva na sua conta e aplicada em qualquer aparelho.`
+            : `Preferência de ${user.name.split(' ')[0]}: salva para o seu usuário neste navegador.`}
+        </p>
+      )}
     </div>
   );
 };

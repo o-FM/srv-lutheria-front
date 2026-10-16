@@ -7,7 +7,7 @@
 import { isApiMode } from '../config/env';
 import { api, ApiError, tokenStore } from './api';
 import { toAuthUser } from './api/mappers';
-import type { Profile } from './api/types';
+import type { Profile, UserPreferencesDto } from './api/types';
 
 export interface AuthUser {
   id: string;
@@ -20,6 +20,8 @@ export interface AuthUser {
   /** Só no modo API */
   profile?: Profile;
   tenantId?: string;
+  /** Aparência escolhida pelo usuário (modo API: salva na conta). */
+  preferences?: UserPreferencesDto;
 }
 
 export interface LoginResponse {

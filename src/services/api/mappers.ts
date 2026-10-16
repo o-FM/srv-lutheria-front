@@ -61,6 +61,7 @@ export function toAuthUser(u: UserDto): AuthUser {
     isAdmin: u.profile === 'ADMIN',
     profile: u.profile,
     tenantId: u.tenantId,
+    preferences: u.preferences ?? undefined,
   };
 }
 

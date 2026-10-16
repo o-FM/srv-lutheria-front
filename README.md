@@ -53,6 +53,7 @@ src/
 | Cadastro da oficina (`/cadastro`) | `POST /auth/register` |
 | Redefinir senha (`/redefinir-senha#token=`) | `POST /auth/reset-password` |
 | Usuário logado | `GET /users/me` |
+| Aparência do usuário | `PUT /users/me/preferences` |
 | Carga inicial | `/customers`, `/instruments`, `/products`, `/service-orders?full=true` |
 | Novo cliente / instrumento | `POST /customers`, `POST /customers/{id}/instruments` |
 | Nova OS (wizard) | `POST /service-orders` |
@@ -78,6 +79,10 @@ Menu do usuário → **Aparência** (ou *Mais → Configurações*):
 - Modo: claro, escuro ou do sistema.
 - Cor de destaque: âmbar, azul, esmeralda, violeta, rosa, petróleo.
 - Tom dos neutros: quente, neutro, ardósia.
+
+A escolha é **de cada usuário**: com a API fica salva na conta (`PUT /users/me/preferences`) e
+acompanha a pessoa em qualquer aparelho; no modo demonstração fica no navegador, separada por
+usuário. Na tela de login vale a última aparência usada no aparelho.
 
 Os componentes usam só as escalas semânticas `base-*` (neutros) e `accent-*` (destaque),
 definidas em `src/index.css` e trocadas em tempo real por atributos no `<html>`. Para criar uma

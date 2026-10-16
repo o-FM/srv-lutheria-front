@@ -31,6 +31,7 @@ import type {
   TokenResponse,
   UpdateOrderRequest,
   UserDto,
+  UserPreferencesDto,
 } from './types';
 import type { OrderStatus, StockCategory } from '../../types';
 
@@ -51,6 +52,8 @@ export const authEndpoints = {
 
 export const userEndpoints = {
   me: () => http.get<UserDto>('/users/me'),
+  updateMyPreferences: (preferences: UserPreferencesDto) =>
+    http.put<UserDto>('/users/me/preferences', preferences),
   list: () => http.get<UserDto[]>('/users'),
   create: (body: CreateUserRequest) => http.post<UserDto>('/users', body),
   changeProfile: (userId: string, profile: Profile) =>
