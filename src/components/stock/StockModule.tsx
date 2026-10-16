@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { NewProductForm } from './NewProductForm';
 import { useApp } from '../../context/AppContext';
 import {
   Package,
@@ -21,6 +22,7 @@ export const StockModule: React.FC = () => {
     currentRole,
     setActiveTab: setAppActiveTab,
     updateStockQuantity,
+    loadStockMovements,
     openBarcodeScanner,
     triggerHaptic,
     showToast,
@@ -29,6 +31,14 @@ export const StockModule: React.FC = () => {
   const [categoryFilter, setCategoryFilter] = useState<string>('todos');
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'itens' | 'historico'>('itens');
+  const [isNewItemOpen, setIsNewItemOpen] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+
+  useEffect(() => {
+    if (activeTab !== 'historico') return;
+    setIsLoadingHistory(true);
+    loadStockMovements().finally(() => setIsLoadingHistory(false));
+  }, [activeTab, loadStockMovements]);
 
   // Strict role check: Stock is exclusive to Luthier/Admin
   if (currentRole !== 'luthier') {
@@ -83,6 +93,7 @@ export const StockModule: React.FC = () => {
       const matched = stock.find((s) => s.barcode === code);
       if (matched) {
         setSearchTerm(matched.name);
+        setActiveTab('itens');
         showToast({
           title: `Item Encontrado: ${matched.name}`,
           description: `Estoque atual: ${matched.currentQuantity} ${matched.unit}`,
@@ -91,9 +102,10 @@ export const StockModule: React.FC = () => {
       } else {
         showToast({
           title: 'Código não cadastrado',
-          description: `Código escaneado: ${code}`,
+          description: `Código ${code}: cadastre o item para usar a leitura.`,
           type: 'warning',
         });
+        setIsNewItemOpen(true);
       }
     });
   };
@@ -123,6 +135,15 @@ export const StockModule: React.FC = () => {
           <span className="hidden sm:inline">Escanear</span>
         </button>
       </div>
+
+      <button
+        type="button"
+        onClick={() => setIsNewItemOpen(!isNewItemOpen)}
+        className="w-full py-2.5 rounded-xl border border-dashed border-stone-700 hover:border-amber-600 text-xs font-semibold text-amber-400 flex items-center justify-center gap-1.5"
+      >
+        <Plus className="w-4 h-4" /> {isNewItemOpen ? 'Fechar cadastro' : 'Cadastrar novo item no estoque'}
+      </button>
+      {isNewItemOpen && <NewProductForm onDone={() => setIsNewItemOpen(false)} />}
 
       {/* Critical Stock Warning Alert */}
       {lowStockItems.length > 0 && (
@@ -200,7 +221,7 @@ export const StockModule: React.FC = () => {
               : 'text-stone-400'
           }`}
         >
-          Histórico de Baixas ({stockMovements.length})
+          Movimentações
         </button>
       </div>
 
@@ -230,7 +251,8 @@ export const StockModule: React.FC = () => {
                       )}
                     </div>
                     <p className="text-[11px] text-stone-400 mt-0.5">
-                      {item.brand} · {item.location} · SKU: <span className="font-mono">{item.sku}</span>
+                      {[item.brand, item.location].filter(Boolean).map((t) => `${t} · `).join('')}SKU:{' '}
+                      <span className="font-mono">{item.sku}</span>
                     </p>
                   </div>
 
@@ -292,6 +314,10 @@ export const StockModule: React.FC = () => {
       ) : (
         /* Movements Log */
         <div className="space-y-2">
+          {isLoadingHistory && <p className="text-xs text-stone-500">Carregando movimentações...</p>}
+          {!isLoadingHistory && stockMovements.length === 0 && (
+            <p className="text-xs text-stone-500">Nenhuma movimentação registrada.</p>
+          )}
           {stockMovements.map((mov) => (
             <div
               key={mov.id}
@@ -309,7 +335,11 @@ export const StockModule: React.FC = () => {
                   </p>
                 </div>
                 <p className="text-[11px] text-stone-400 mt-0.5">{mov.reason}</p>
-                <span className="text-[10px] text-stone-500">{mov.date}</span>
+                <span className="text-[10px] text-stone-500">
+                  {mov.date}
+                  {mov.createdBy ? ` · ${mov.createdBy}` : ''}
+                  {mov.balanceAfter !== undefined ? ` · saldo ${mov.balanceAfter}` : ''}
+                </span>
               </div>
               <span
                 className={`font-mono text-xs font-bold shrink-0 ${
@@ -317,7 +347,7 @@ export const StockModule: React.FC = () => {
                 }`}
               >
                 {mov.type === 'entrada' ? '+' : '-'}
-                {mov.quantity} un
+                {mov.quantity}
               </span>
             </div>
           ))}

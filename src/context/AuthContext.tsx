@@ -1,255 +1,193 @@
-import React, {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  useCallback,
-  ReactNode,
-} from 'react';
-import { AuthUser, authApi } from '../services/authApi';
-import { UserRole } from '../types';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { api } from '../services/api';
+import { sessionStore } from '../services/http';
+import { AuthUser, toAuthUser } from '../services/mappers';
 
-interface ReauthModalState {
-  isOpen: boolean;
-  actionType: 'SWITCH_PROFILE' | 'SENSITIVE_UPDATE';
-  targetRole?: UserRole;
-  title: string;
-  description: string;
-  resolve?: (ticket: string) => void;
-  reject?: () => void;
+export type { AuthUser };
+
+interface RegisterInput {
+  workshopName: string;
+  workshopDocument?: string;
+  ownerName: string;
+  email: string;
+  password: string;
+  cpf?: string;
+  phone?: string;
 }
 
 interface AuthContextType {
   user: AuthUser | null;
-  token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (identifier: string, pass: string, remember: boolean) => Promise<AuthUser>;
+  login: (email: string, pass: string, remember: boolean) => Promise<AuthUser>;
+  register: (input: RegisterInput) => Promise<AuthUser>;
   logout: () => Promise<void>;
-  requestReauthentication: (config: {
-    actionType: 'SWITCH_PROFILE' | 'SENSITIVE_UPDATE';
-    targetRole?: UserRole;
-    title?: string;
-    description?: string;
-  }) => Promise<string>;
-  reauthModal: ReauthModalState;
-  closeReauthModal: () => void;
-  confirmReauthSuccess: (ticket: string) => void;
-  switchProfileWithTicket: (ticket: string) => Promise<AuthUser>;
+  /** Aparelho compartilhado: outra pessoa da oficina entra sem sair do app. */
+  switchUser: (email: string, pass: string) => Promise<AuthUser>;
+  updateAccount: (changes: {
+    currentPassword: string;
+    email?: string;
+    phone?: string;
+    newPassword?: string;
+  }) => Promise<AuthUser>;
+  isSwitchUserOpen: boolean;
+  setIsSwitchUserOpen: (open: boolean) => void;
   isAccountSettingsOpen: boolean;
   setIsAccountSettingsOpen: (open: boolean) => void;
   isForgotPasswordOpen: boolean;
   setIsForgotPasswordOpen: (open: boolean) => void;
-  updateUserInMemory: (user: AuthUser) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes of inactivity
+const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
+const REMEMBER_KEY = 'luthier_remember';
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [token, setToken] = useState<string | null>(() => {
-    return localStorage.getItem('luthier_auth_token') || sessionStorage.getItem('luthier_auth_token');
-  });
-
-  const [user, setUser] = useState<AuthUser | null>(() => {
-    const saved = localStorage.getItem('luthier_auth_user') || sessionStorage.getItem('luthier_auth_user');
-    return saved ? JSON.parse(saved) : null;
-  });
-
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(sessionStore.hasSession());
   const [isAccountSettingsOpen, setIsAccountSettingsOpen] = useState(false);
   const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
+  const [isSwitchUserOpen, setIsSwitchUserOpen] = useState(false);
+  const [remember, setRemember] = useState(() => localStorage.getItem(REMEMBER_KEY) === 'true');
 
-  const [reauthModal, setReauthModal] = useState<ReauthModalState>({
-    isOpen: false,
-    actionType: 'SENSITIVE_UPDATE',
-    title: 'Confirme sua Identidade',
-    description: 'Digite seu E-mail ou CPF e senha para continuar.',
-  });
+  const clearLocalState = useCallback(() => {
+    sessionStore.clear();
+    localStorage.removeItem('luthier_os_wizard_draft');
+    setUser(null);
+    setIsAccountSettingsOpen(false);
+    setIsSwitchUserOpen(false);
+  }, []);
 
-  // Verify session on mount with server
+  // Sessão salva: confirma com o servidor (o refresh acontece sozinho se o JWT venceu)
   useEffect(() => {
-    let isMounted = true;
-    async function checkSession() {
-      if (!token) {
-        if (isMounted) setIsLoading(false);
-        return;
-      }
+    if (!sessionStore.hasSession()) return;
+    let alive = true;
+    api.users
+      .me()
+      .then((me) => alive && setUser(toAuthUser(me)))
+      .catch(() => alive && clearLocalState())
+      .finally(() => alive && setIsLoading(false));
+    return () => {
+      alive = false;
+    };
+  }, [clearLocalState]);
+
+  useEffect(() => {
+    const unsubscribe = sessionStore.onExpired(() => setUser(null));
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  const logout = useCallback(async () => {
+    const current = sessionStore.get();
+    if (current) {
       try {
-        const remoteUser = await authApi.getMe(token);
-        if (isMounted) {
-          setUser(remoteUser);
-          setIsLoading(false);
-        }
+        await api.auth.logout(current.refreshToken);
       } catch {
-        // Token expired or invalid
-        if (isMounted) {
-          localStorage.removeItem('luthier_auth_token');
-          sessionStorage.removeItem('luthier_auth_token');
-          localStorage.removeItem('luthier_auth_user');
-          sessionStorage.removeItem('luthier_auth_user');
-          setToken(null);
-          setUser(null);
-          setIsLoading(false);
-        }
+        // sem rede: a sessão local é descartada mesmo assim
       }
     }
-    checkSession();
-    return () => {
-      isMounted = false;
-    };
-  }, [token]);
+    clearLocalState();
+  }, [clearLocalState]);
 
-  // Inactivity tracking
+  // Sem "manter conectado", a sessão cai após 15 min sem uso (aparelho de balcão compartilhado)
   useEffect(() => {
-    if (!token) return;
-
-    let timer: NodeJS.Timeout;
-
-    const resetInactivity = () => {
+    if (!user || remember) return;
+    let timer: ReturnType<typeof setTimeout>;
+    const reset = () => {
       clearTimeout(timer);
       timer = setTimeout(() => {
-        // Logout due to inactivity
         logout();
       }, INACTIVITY_TIMEOUT_MS);
     };
-
     const events = ['mousedown', 'keydown', 'touchstart', 'scroll'];
-    events.forEach((ev) => window.addEventListener(ev, resetInactivity));
-    resetInactivity();
-
+    events.forEach((ev) => window.addEventListener(ev, reset));
+    reset();
     return () => {
       clearTimeout(timer);
-      events.forEach((ev) => window.removeEventListener(ev, resetInactivity));
+      events.forEach((ev) => window.removeEventListener(ev, reset));
     };
-  }, [token]);
+  }, [user, remember, logout]);
+
+  const startSession = useCallback(async (tokens: Parameters<typeof sessionStore.set>[0], keep: boolean) => {
+    sessionStore.set(tokens, keep);
+    setRemember(keep);
+    localStorage.setItem(REMEMBER_KEY, String(keep));
+    const me = toAuthUser(await api.users.me());
+    setUser(me);
+    return me;
+  }, []);
 
   const login = useCallback(
-    async (identifier: string, pass: string, remember: boolean): Promise<AuthUser> => {
-      const res = await authApi.login(identifier, pass, remember);
-      setToken(res.token);
-      setUser(res.user);
-
-      if (remember) {
-        localStorage.setItem('luthier_auth_token', res.token);
-        localStorage.setItem('luthier_auth_user', JSON.stringify(res.user));
-      } else {
-        sessionStorage.setItem('luthier_auth_token', res.token);
-        sessionStorage.setItem('luthier_auth_user', JSON.stringify(res.user));
-      }
-
-      return res.user;
+    async (email: string, pass: string, keep: boolean) => {
+      const tokens = await api.auth.login(email.trim(), pass);
+      return startSession(tokens, keep);
     },
-    []
+    [startSession]
   );
 
-  const logout = useCallback(async () => {
-    if (token) {
-      await authApi.logout(token);
-    }
-    localStorage.removeItem('luthier_auth_token');
-    sessionStorage.removeItem('luthier_auth_token');
-    localStorage.removeItem('luthier_auth_user');
-    sessionStorage.removeItem('luthier_auth_user');
-    setToken(null);
-    setUser(null);
-    setIsAccountSettingsOpen(false);
-  }, [token]);
-
-  // Opens the Reauthentication Bottom Sheet and returns a Promise resolving with the single-use ticket
-  const requestReauthentication = useCallback(
-    (config: {
-      actionType: 'SWITCH_PROFILE' | 'SENSITIVE_UPDATE';
-      targetRole?: UserRole;
-      title?: string;
-      description?: string;
-    }): Promise<string> => {
-      return new Promise<string>((resolve, reject) => {
-        setReauthModal({
-          isOpen: true,
-          actionType: config.actionType,
-          targetRole: config.targetRole,
-          title: config.title || 'Confirme sua Identidade',
-          description:
-            config.description ||
-            (config.actionType === 'SWITCH_PROFILE'
-              ? 'Para trocar de perfil, informe as credenciais de acesso da conta destino.'
-              : 'Para atualizar dados sensíveis, confirme sua identificação e senha atual.'),
-          resolve,
-          reject,
-        });
+  const register = useCallback(
+    async (input: RegisterInput) => {
+      const tokens = await api.auth.register({
+        workshop: { name: input.workshopName.trim(), document: input.workshopDocument || undefined },
+        owner: {
+          name: input.ownerName.trim(),
+          email: input.email.trim(),
+          password: input.password,
+          cpf: input.cpf || undefined,
+          phone: input.phone || undefined,
+        },
       });
+      return startSession(tokens, true);
+    },
+    [startSession]
+  );
+
+  const switchUser = useCallback(
+    async (email: string, pass: string) => {
+      // Valida o novo usuário antes de encerrar a sessão atual
+      const tokens = await api.auth.login(email.trim(), pass);
+      const previous = sessionStore.get();
+      if (previous) {
+        api.auth.logout(previous.refreshToken).catch(() => undefined);
+      }
+      localStorage.removeItem('luthier_os_wizard_draft');
+      return startSession(tokens, false);
+    },
+    [startSession]
+  );
+
+  const updateAccount = useCallback<AuthContextType['updateAccount']>(
+    async (changes) => {
+      const res = await api.users.updateMe(changes);
+      // Trocar e-mail/senha encerra as outras sessões; este aparelho recebe tokens novos
+      if (res.session) sessionStore.set(res.session);
+      const updated = toAuthUser(res.user);
+      setUser(updated);
+      return updated;
     },
     []
   );
-
-  const closeReauthModal = useCallback(() => {
-    if (reauthModal.reject) {
-      reauthModal.reject();
-    }
-    setReauthModal((prev) => ({ ...prev, isOpen: false, resolve: undefined, reject: undefined }));
-  }, [reauthModal]);
-
-  const confirmReauthSuccess = useCallback(
-    (ticket: string) => {
-      if (reauthModal.resolve) {
-        reauthModal.resolve(ticket);
-      }
-      setReauthModal((prev) => ({ ...prev, isOpen: false, resolve: undefined, reject: undefined }));
-    },
-    [reauthModal]
-  );
-
-  // Switch profile server-side, and purge local caches according to business rule
-  const switchProfileWithTicket = useCallback(
-    async (ticket: string): Promise<AuthUser> => {
-      if (!token) throw new Error('Não autenticado.');
-
-      const res = await authApi.switchProfile(token, ticket);
-
-      // Clean local storage cache, offline queues, and draft state to prevent leakage between roles
-      localStorage.removeItem('luthier_os_wizard_draft');
-
-      setToken(res.token);
-      setUser(res.user);
-      sessionStorage.setItem('luthier_auth_token', res.token);
-      sessionStorage.setItem('luthier_auth_user', JSON.stringify(res.user));
-
-      return res.user;
-    },
-    [token]
-  );
-
-  const updateUserInMemory = useCallback((updated: AuthUser) => {
-    setUser(updated);
-    if (localStorage.getItem('luthier_auth_user')) {
-      localStorage.setItem('luthier_auth_user', JSON.stringify(updated));
-    }
-    if (sessionStorage.getItem('luthier_auth_user')) {
-      sessionStorage.setItem('luthier_auth_user', JSON.stringify(updated));
-    }
-  }, []);
 
   return (
     <AuthContext.Provider
       value={{
         user,
-        token,
-        isAuthenticated: !!user && !!token,
+        isAuthenticated: !!user,
         isLoading,
         login,
+        register,
         logout,
-        requestReauthentication,
-        reauthModal,
-        closeReauthModal,
-        confirmReauthSuccess,
-        switchProfileWithTicket,
+        switchUser,
+        updateAccount,
+        isSwitchUserOpen,
+        setIsSwitchUserOpen,
         isAccountSettingsOpen,
         setIsAccountSettingsOpen,
         isForgotPasswordOpen,
         setIsForgotPasswordOpen,
-        updateUserInMemory,
       }}
     >
       {children}

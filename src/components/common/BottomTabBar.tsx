@@ -21,11 +21,6 @@ export const BottomTabBar: React.FC = () => {
     currentRole,
   } = useApp();
 
-  // Cliente has their own dedicated portal interface without staff tabs
-  if (currentRole === 'cliente') {
-    return null;
-  }
-
   const activeOrdersCount = orders.filter(
     (o) => o.status !== 'entregue' && o.status !== 'cancelado'
   ).length;

@@ -32,16 +32,12 @@ export const WorkbenchModeModal: React.FC = () => {
     showToast,
   } = useApp();
 
-  if (!isWorkbenchModeOpen || currentRole !== 'luthier') return null;
-
-  // Find active orders on bench (em_execucao, diagnostico, recebido)
+  // OS na bancada (em execução, diagnóstico, recebidas)
   const benchOrders = orders.filter(
     (o) => o.status === 'em_execucao' || o.status === 'diagnostico' || o.status === 'recebido'
   );
 
-  const [selectedOrderId, setSelectedOrderId] = useState<string>(
-    benchOrders[0]?.id || orders[0]?.id || ''
-  );
+  const [selectedOrderId, setSelectedOrderId] = useState<string>('');
 
   // Bench Timer state (e.g. for clamp pressure / glue drying)
   const [timerSeconds, setTimerSeconds] = useState(1800); // 30 min default for Titebond
@@ -67,9 +63,11 @@ export const WorkbenchModeModal: React.FC = () => {
     return () => clearInterval(interval);
   }, [isTimerRunning, timerSeconds, triggerHaptic, showToast]);
 
-  if (!isWorkbenchModeOpen) return null;
+  // Hooks acima sempre executam; só então o modal decide se aparece
+  if (!isWorkbenchModeOpen || currentRole !== 'luthier') return null;
 
-  const currentOrder = orders.find((o) => o.id === selectedOrderId) || orders[0];
+  const currentOrder =
+    orders.find((o) => o.id === selectedOrderId) || benchOrders[0] || orders[0];
   const instrument = instruments.find((i) => i.id === currentOrder?.instrumentId);
   const client = clients.find((c) => c.id === currentOrder?.clientId);
 
@@ -81,11 +79,11 @@ export const WorkbenchModeModal: React.FC = () => {
 
   const handleTakePhoto = () => {
     triggerHaptic();
-    openCamera((url, caption) => {
+    openCamera((url, caption, tag) => {
       if (currentOrder) {
         addOrderPhoto(currentOrder.id, {
           url,
-          tag: 'bancada',
+          tag: tag || 'bancada',
           caption: caption || 'Registro rápido na bancada de trabalho',
         });
       }

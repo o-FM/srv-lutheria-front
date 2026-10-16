@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { authApi } from '../../services/authApi';
-import { formatCpf, cleanCpf } from '../../utils/cpfValidator';
+import { api } from '../../services/api';
+import { isValidEmail } from '../../utils/cpfValidator';
 import { KeyRound, X, Mail, CheckCircle2, AlertCircle } from 'lucide-react';
 
 export const ForgotPasswordModal: React.FC = () => {
@@ -14,32 +14,25 @@ export const ForgotPasswordModal: React.FC = () => {
   if (!isForgotPasswordOpen) return null;
 
   const handleIdentifierChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
     setErrorMsg(null);
-    if (val.includes('@')) {
-      setIdentifier(val.trim());
-    } else {
-      const digits = cleanCpf(val);
-      if (digits.length > 0) {
-        setIdentifier(formatCpf(digits));
-      } else {
-        setIdentifier(val);
-      }
-    }
+    setIdentifier(e.target.value.trim());
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!identifier.trim()) {
-      setErrorMsg('Informe seu e-mail ou CPF cadastrado.');
+    if (!isValidEmail(identifier)) {
+      setErrorMsg('Informe o e-mail cadastrado.');
       return;
     }
 
     setIsLoading(true);
     setErrorMsg(null);
     try {
-      const res = await authApi.forgotPassword(identifier);
-      setSuccessMsg(res.message);
+      await api.auth.forgotPassword(identifier);
+      // Resposta igual exista ou não a conta (não revela quem é cliente)
+      setSuccessMsg(
+        'Se houver uma conta com este e-mail, você receberá um link para criar uma nova senha. Confira também a caixa de spam.'
+      );
     } catch (err: any) {
       setErrorMsg(err.message || 'Erro ao processar solicitação.');
     } finally {
@@ -88,7 +81,7 @@ export const ForgotPasswordModal: React.FC = () => {
           ) : (
             <form onSubmit={handleSubmit} className="space-y-3">
               <p className="text-xs text-stone-300">
-                Digite seu e-mail ou CPF cadastrado. Enviaremos um link de uso único com expiração em 15 minutos.
+                Digite o e-mail da sua conta. Enviaremos um link de uso único para criar uma nova senha.
               </p>
 
               {errorMsg && (
@@ -100,14 +93,14 @@ export const ForgotPasswordModal: React.FC = () => {
 
               <div>
                 <label className="text-[11px] uppercase font-bold text-stone-400 block mb-1">
-                  E-mail ou CPF
+                  E-mail
                 </label>
                 <input
-                  type="text"
+                  type="email"
                   autoFocus
                   value={identifier}
                   onChange={handleIdentifierChange}
-                  placeholder="seu.email@exemplo.com ou 000.000.000-00"
+                  placeholder="seu.email@oficina.com"
                   className="w-full px-3 py-2.5 bg-stone-950 border border-stone-800 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500"
                 />
               </div>

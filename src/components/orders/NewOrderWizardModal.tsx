@@ -16,34 +16,8 @@ import {
   Phone,
   Tag,
 } from 'lucide-react';
-import { InstrumentType, Photo, ServiceItem } from '../../types';
+import { InstrumentType, Photo } from '../../types';
 
-const COMMON_SERVICES = [
-  {
-    title: 'Regulagem Completa (Ação, tensor, oitavas, hidratação)',
-    laborPrice: 160,
-  },
-  {
-    title: 'Retífica, coroamento e polimento de trastes',
-    laborPrice: 280,
-  },
-  {
-    title: 'Confecção de nut artesanal em osso bovino',
-    laborPrice: 140,
-  },
-  {
-    title: 'Blindagem total das cavidades com cobre',
-    laborPrice: 130,
-  },
-  {
-    title: 'Colagem estrutural de cavalete / trinca de tampo',
-    laborPrice: 350,
-  },
-  {
-    title: 'Troca de cordas e limpeza da escala',
-    laborPrice: 60,
-  },
-];
 
 export const NewOrderWizardModal: React.FC = () => {
   const {
@@ -54,6 +28,7 @@ export const NewOrderWizardModal: React.FC = () => {
     instruments,
     createInstrument,
     createOrder,
+    catalog,
     openCamera,
     setActiveOrderId,
     triggerHaptic,
@@ -72,8 +47,9 @@ export const NewOrderWizardModal: React.FC = () => {
   const [selectedInstrumentId, setSelectedInstrumentId] = useState<string>('');
   const [isAddingNewInstrument, setIsAddingNewInstrument] = useState(false);
   const [instType, setInstType] = useState<InstrumentType>('guitarra');
-  const [instBrand, setInstBrand] = useState('Fender');
-  const [instModel, setInstModel] = useState('Stratocaster');
+  const [instBrand, setInstBrand] = useState('');
+  const [instModel, setInstModel] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
   const [photos, setPhotos] = useState<Photo[]>([]);
 
   // Issue & Voice
@@ -81,9 +57,10 @@ export const NewOrderWizardModal: React.FC = () => {
   const [isListening, setIsListening] = useState(false);
 
   // Services & Timeline
-  const [selectedServices, setSelectedServices] = useState<
-    { title: string; laborPrice: number; selected: boolean }[]
-  >(COMMON_SERVICES.map((s) => ({ ...s, selected: false })));
+  const [selectedCatalogIds, setSelectedCatalogIds] = useState<string[]>([]);
+  const [customServices, setCustomServices] = useState<{ title: string; laborPrice: number }[]>([]);
+  const [customTitle, setCustomTitle] = useState('');
+  const [customPrice, setCustomPrice] = useState('');
   const [estimatedDeliveryDays, setEstimatedDeliveryDays] = useState(5);
   const [priority, setPriority] = useState<'normal' | 'alta' | 'urgente'>('normal');
 
@@ -135,13 +112,9 @@ export const NewOrderWizardModal: React.FC = () => {
   const handleVoiceDictation = () => {
     triggerHaptic();
     if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
-      setReportedIssue((prev) =>
-        prev
-          ? `${prev}. Trastejamento na 5ª corda e ruído no potenciômetro de volume.`
-          : 'Trastejamento na 5ª corda e ruído no potenciômetro de volume.'
-      );
       showToast({
-        title: 'Ditado simulado inserido',
+        title: 'Ditado por voz indisponível',
+        description: 'Este navegador não oferece reconhecimento de voz. Digite o defeito.',
         type: 'info',
       });
       return;
@@ -169,33 +142,37 @@ export const NewOrderWizardModal: React.FC = () => {
 
   const handleTakePhoto = () => {
     triggerHaptic();
-    openCamera((url, caption) => {
+    openCamera((url, caption, tag) => {
       const newPh: Photo = {
         id: 'ph-' + Date.now(),
         url,
-        tag: 'entrada',
+        tag: tag || 'entrada',
         caption: caption || 'Foto de entrada na oficina',
         timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
       };
       setPhotos((prev) => [newPh, ...prev]);
-    });
+    }, 'entrada');
   };
 
-  const handleNextStep = () => {
+  const handleNextStep = async () => {
     triggerHaptic();
+    if (isSaving) return;
     if (step === 1) {
-      // Validate or create client
       if (isAddingNewClient) {
         if (!newClientName.trim()) {
           showToast({ title: 'Informe o nome do cliente', type: 'warning' });
           return;
         }
-        const created = createClient({
-          name: newClientName.trim(),
-          phone: newClientPhone.trim() || '(11) 99999-0000',
-          email: `${newClientName.toLowerCase().replace(/\s+/g, '')}@email.com`,
-        });
+        if (newClientPhone.replace(/\D/g, '').length < 10) {
+          showToast({ title: 'Informe o WhatsApp com DDD', type: 'warning' });
+          return;
+        }
+        setIsSaving(true);
+        const created = await createClient({ name: newClientName.trim(), phone: newClientPhone.trim() });
+        setIsSaving(false);
+        if (!created) return;
         setSelectedClientId(created.id);
+        setSelectedInstrumentId('');
         setIsAddingNewClient(false);
       } else if (!selectedClientId) {
         showToast({ title: 'Selecione ou cadastre um cliente', type: 'warning' });
@@ -203,81 +180,76 @@ export const NewOrderWizardModal: React.FC = () => {
       }
       setStep(2);
     } else if (step === 2) {
-      // Validate instrument
+      if (!reportedIssue.trim()) {
+        showToast({ title: 'Informe o defeito relatado ou serviço', type: 'warning' });
+        return;
+      }
       if (isAddingNewInstrument || !selectedInstrumentId) {
         if (!instBrand.trim() || !instModel.trim()) {
           showToast({ title: 'Informe marca e modelo do instrumento', type: 'warning' });
           return;
         }
-        const createdInst = createInstrument(
-          {
-            clientId: selectedClientId,
-            type: instType,
-            brand: instBrand.trim(),
-            model: instModel.trim(),
-            stringsGauge: '0.10',
-            tuningPreference: 'Padrão E',
-            conditionNotes: reportedIssue,
-          },
-          photos
-        );
+        setIsSaving(true);
+        const createdInst = await createInstrument(selectedClientId, {
+          type: instType,
+          brand: instBrand.trim(),
+          model: instModel.trim(),
+          conditionNotes: reportedIssue.trim(),
+        });
+        setIsSaving(false);
+        if (!createdInst) return;
         setSelectedInstrumentId(createdInst.id);
         setIsAddingNewInstrument(false);
-      }
-
-      if (!reportedIssue.trim()) {
-        showToast({ title: 'Informe o defeito relatado ou serviço', type: 'warning' });
-        return;
       }
       setStep(3);
     }
   };
 
-  const handleFinishOrder = () => {
-    triggerHaptic();
-    const finalServices: ServiceItem[] = selectedServices
-      .filter((s) => s.selected)
-      .map((s, idx) => ({
-        id: 'srv-' + Date.now() + '-' + idx,
-        title: s.title,
-        laborPrice: s.laborPrice,
-        done: false,
-        partsUsed: [],
-      }));
-
-    // If no service selected, create one with default
-    if (finalServices.length === 0) {
-      finalServices.push({
-        id: 'srv-' + Date.now(),
-        title: 'Diagnóstico e Regulagem Padrão',
-        laborPrice: 150,
-        done: false,
-        partsUsed: [],
-      });
+  const addCustomService = () => {
+    const price = parseFloat(customPrice.replace(',', '.'));
+    if (!customTitle.trim() || !(price >= 0)) {
+      showToast({ title: 'Informe descrição e valor do serviço', type: 'warning' });
+      return;
     }
+    setCustomServices((prev) => [...prev, { title: customTitle.trim(), laborPrice: price }]);
+    setCustomTitle('');
+    setCustomPrice('');
+  };
 
-    const estimatedDate = new Date(
-      Date.now() + estimatedDeliveryDays * 24 * 3600 * 1000
-    )
+  const handleFinishOrder = async () => {
+    triggerHaptic();
+    if (isSaving) return;
+
+    const estimatedDate = new Date(Date.now() + estimatedDeliveryDays * 24 * 3600 * 1000)
       .toISOString()
       .substring(0, 10);
 
-    const created = createOrder(
+    setIsSaving(true);
+    const created = await createOrder(
       {
         priority,
         reportedIssue: reportedIssue.trim(),
-        diagnosisNotes: 'Aguardando posicionamento na bancada.',
         estimatedDeliveryDate: estimatedDate,
-        services: finalServices,
+        services: [
+          ...selectedCatalogIds.map((catalogId) => ({ catalogId })),
+          ...customServices,
+        ],
         photos,
       },
       selectedClientId,
       selectedInstrumentId
     );
+    setIsSaving(false);
+    if (!created) return;
 
-    // Clear draft
     localStorage.removeItem('luthier_os_wizard_draft');
-
+    setStep(1);
+    setPhotos([]);
+    setReportedIssue('');
+    setSelectedCatalogIds([]);
+    setCustomServices([]);
+    setSelectedClientId('');
+    setSelectedInstrumentId('');
     setIsNewOrderWizardOpen(false);
     setActiveOrderId(created.id);
   };
@@ -386,7 +358,7 @@ export const NewOrderWizardModal: React.FC = () => {
                         >
                           <div>
                             <p className="text-xs font-bold text-white">{cli.name}</p>
-                            <p className="text-[11px] text-stone-400">{cli.phone} · {cli.address || 'São Paulo'}</p>
+                            <p className="text-[11px] text-stone-400">{cli.phone}{cli.address ? ` · ${cli.address}` : ''}</p>
                           </div>
                           {isSelected && <CheckCircle2 className="w-5 h-5 text-amber-400 shrink-0" />}
                         </button>
@@ -602,47 +574,93 @@ export const NewOrderWizardModal: React.FC = () => {
                 3. Serviços & Prazo de Entrega
               </span>
 
-              {/* Quick Services Checkboxes */}
+              {/* Serviços do catálogo da oficina + avulsos */}
               <div className="space-y-1.5">
                 <label className="text-[11px] font-bold text-stone-400 uppercase tracking-wider block">
-                  Serviços Sugeridos (Selecione os aplicáveis):
+                  Serviços do catálogo (selecione os aplicáveis):
                 </label>
+                {catalog.length === 0 && (
+                  <p className="text-[11px] text-stone-500">
+                    Nenhum serviço no catálogo ainda. Cadastre em Mais → Config, ou adicione um avulso abaixo.
+                  </p>
+                )}
                 <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                  {selectedServices.map((svc, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => {
-                        triggerHaptic();
-                        setSelectedServices((prev) =>
-                          prev.map((s, i) =>
-                            i === idx ? { ...s, selected: !s.selected } : s
-                          )
-                        );
-                      }}
-                      className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-left text-xs transition-colors ${
-                        svc.selected
-                          ? 'bg-amber-950/60 border-amber-500 text-amber-100'
-                          : 'bg-stone-950 border-stone-800 text-stone-300 hover:bg-stone-850'
-                      }`}
+                  {catalog.map((svc) => {
+                    const selected = selectedCatalogIds.includes(svc.id);
+                    return (
+                      <button
+                        key={svc.id}
+                        type="button"
+                        onClick={() => {
+                          triggerHaptic();
+                          setSelectedCatalogIds((prev) =>
+                            selected ? prev.filter((id) => id !== svc.id) : [...prev, svc.id]
+                          );
+                        }}
+                        className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-left text-xs transition-colors ${
+                          selected
+                            ? 'bg-amber-950/60 border-amber-500 text-amber-100'
+                            : 'bg-stone-950 border-stone-800 text-stone-300 hover:bg-stone-900'
+                        }`}
+                      >
+                        <span className="truncate pr-2 font-medium">{svc.title}</span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="font-bold text-amber-400">R$ {svc.laborPrice.toFixed(2)}</span>
+                          <div
+                            className={`w-4 h-4 rounded border flex items-center justify-center ${
+                              selected ? 'bg-amber-600 border-amber-500 text-white' : 'border-stone-600'
+                            }`}
+                          >
+                            {selected && <CheckCircle2 className="w-3.5 h-3.5" />}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                  {customServices.map((svc, idx) => (
+                    <div
+                      key={`custom-${idx}`}
+                      className="w-full flex items-center justify-between p-2.5 rounded-xl border bg-amber-950/60 border-amber-500 text-amber-100 text-xs"
                     >
                       <span className="truncate pr-2 font-medium">{svc.title}</span>
                       <div className="flex items-center gap-2 shrink-0">
-                        <span className="font-bold text-amber-400">
-                          R$ {svc.laborPrice}
-                        </span>
-                        <div
-                          className={`w-4 h-4 rounded border flex items-center justify-center ${
-                            svc.selected
-                              ? 'bg-amber-600 border-amber-500 text-white'
-                              : 'border-stone-600'
-                          }`}
+                        <span className="font-bold text-amber-400">R$ {svc.laborPrice.toFixed(2)}</span>
+                        <button
+                          type="button"
+                          onClick={() => setCustomServices((prev) => prev.filter((_, i) => i !== idx))}
+                          className="p-0.5 rounded bg-black/40 text-stone-300"
+                          aria-label="Remover serviço"
                         >
-                          {svc.selected && <CheckCircle2 className="w-3.5 h-3.5" />}
-                        </div>
+                          <X className="w-3 h-3" />
+                        </button>
                       </div>
-                    </button>
+                    </div>
                   ))}
+                </div>
+                <div className="flex gap-1.5 pt-1">
+                  <input
+                    type="text"
+                    value={customTitle}
+                    onChange={(e) => setCustomTitle(e.target.value)}
+                    placeholder="Serviço avulso"
+                    className="flex-1 min-w-0 px-3 py-2 rounded-xl bg-stone-950 border border-stone-700 text-xs text-white"
+                  />
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={customPrice}
+                    onChange={(e) => setCustomPrice(e.target.value)}
+                    placeholder="R$"
+                    className="w-20 px-2 py-2 rounded-xl bg-stone-950 border border-stone-700 text-xs text-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={addCustomService}
+                    className="px-3 rounded-xl bg-stone-800 hover:bg-stone-700 text-amber-400"
+                    aria-label="Adicionar serviço avulso"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
 
@@ -717,19 +735,21 @@ export const NewOrderWizardModal: React.FC = () => {
             <button
               type="button"
               onClick={handleNextStep}
-              className="flex-1 py-3 px-4 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition-all"
+              disabled={isSaving}
+              className="disabled:opacity-60 flex-1 py-3 px-4 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition-all"
             >
-              Avançar para Passo {step + 1}
+              {isSaving ? 'Salvando...' : `Avançar para Passo ${step + 1}`}
               <ChevronRight className="w-4 h-4" />
             </button>
           ) : (
             <button
               type="button"
               onClick={handleFinishOrder}
-              className="flex-1 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-950/50 active:scale-95 transition-all"
+              disabled={isSaving}
+              className="disabled:opacity-60 flex-1 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-950/50 active:scale-95 transition-all"
             >
               <CheckCircle2 className="w-4 h-4 stroke-[3]" />
-              ABRIR ORDEM DE SERVIÇO AGORA
+              {isSaving ? 'ABRINDO OS...' : 'ABRIR ORDEM DE SERVIÇO AGORA'}
             </button>
           )}
         </div>

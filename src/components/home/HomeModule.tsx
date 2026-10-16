@@ -1,5 +1,6 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
+import { PhotoImage } from '../common/PhotoImage';
 import {
   ClipboardList,
   AlertTriangle,
@@ -52,10 +53,10 @@ export const HomeModule: React.FC = () => {
       setIsNewOrderWizardOpen(true);
       return;
     }
-    openCamera((url, caption) => {
+    openCamera((url, caption, tag) => {
       addOrderPhoto(firstActive.id, {
         url,
-        tag: 'bancada',
+        tag: tag || 'bancada',
         caption: caption || 'Foto rápida da bancada',
       });
     });
@@ -336,8 +337,7 @@ export const HomeModule: React.FC = () => {
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="w-12 h-12 rounded-xl bg-stone-950 border border-stone-800 overflow-hidden shrink-0 flex items-center justify-center">
                       {ord.photos[0] ? (
-                        <img
-                          src={ord.photos[0].url}
+                        <PhotoImage photo={ord.photos[0]}
                           alt="Foto"
                           className="w-full h-full object-cover"
                         />

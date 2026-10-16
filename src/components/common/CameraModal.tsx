@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
+import { shrinkImage } from './PhotoImage';
 import {
   Camera,
   X,
@@ -12,41 +13,9 @@ import {
   Image as ImageIcon,
 } from 'lucide-react';
 
-const PRESET_PHOTOS = [
-  {
-    name: 'Tampo com Fissura',
-    tag: 'detalhe_defeito' as const,
-    caption: 'Fissura estrutural de 4cm no tampo harmônico próximo ao cavalete',
-    url: 'https://images.unsplash.com/photo-1510915361894-db8b60106cb1?w=700&auto=format&fit=crop&q=80',
-  },
-  {
-    name: 'Trastes Desgastados',
-    tag: 'diagnostico' as const,
-    caption: 'Desgaste e cavidades nos trastes 1 a 5 necessitando retífica',
-    url: 'https://images.unsplash.com/photo-1516924962500-2b4b3b99ea02?w=700&auto=format&fit=crop&q=80',
-  },
-  {
-    name: 'Blindagem na Bancada',
-    tag: 'bancada' as const,
-    caption: 'Aplicação de fita de cobre com continuidade aterrada na cavidade',
-    url: 'https://images.unsplash.com/photo-1564186763535-ebb21ef5277f?w=700&auto=format&fit=crop&q=80',
-  },
-  {
-    name: 'Pestana de Osso Concluída',
-    tag: 'finalizado' as const,
-    caption: 'Nut esculpido artesanalmente em osso bovino, polido e regulado',
-    url: 'https://images.unsplash.com/photo-1511192336575-5a79af67a629?w=700&auto=format&fit=crop&q=80',
-  },
-  {
-    name: 'Inspeção do Tensor',
-    tag: 'diagnostico' as const,
-    caption: 'Porca do tensor lubrificada e aliviada sob a campânula',
-    url: 'https://images.unsplash.com/photo-1550985616-10810253b84d?w=700&auto=format&fit=crop&q=80',
-  },
-];
 
 export const CameraModal: React.FC = () => {
-  const { isCameraModalOpen, closeCamera, cameraCallback, triggerHaptic, showToast } = useApp();
+  const { isCameraModalOpen, closeCamera, cameraCallback, cameraDefaultTag, triggerHaptic, showToast } = useApp();
 
   const [selectedPhotoUrl, setSelectedPhotoUrl] = useState<string | null>(null);
   const [caption, setCaption] = useState<string>('');
@@ -57,6 +26,10 @@ export const CameraModal: React.FC = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+
+  useEffect(() => {
+    if (isCameraModalOpen) setTag(cameraDefaultTag);
+  }, [isCameraModalOpen, cameraDefaultTag]);
 
   // Stop webcam on close
   useEffect(() => {
@@ -88,7 +61,7 @@ export const CameraModal: React.FC = () => {
     } catch {
       showToast({
         title: 'Câmera nativa não disponível',
-        description: 'Você pode enviar uma foto da galeria ou usar os presets de oficina.',
+        description: 'Permita o acesso à câmera ou envie uma foto da galeria.',
         type: 'info',
       });
     }
@@ -129,10 +102,9 @@ export const CameraModal: React.FC = () => {
   const handleVoiceDictation = () => {
     triggerHaptic();
     if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
-      setCaption((prev) => (prev ? `${prev}. Nivelamento conferido com régua entalhada.` : 'Nivelamento conferido com régua entalhada na bancada.'));
       showToast({
-        title: 'Ditado simulado inserido',
-        description: 'Texto de observação preenchido com sucesso.',
+        title: 'Ditado por voz indisponível',
+        description: 'Este navegador não oferece reconhecimento de voz. Digite a legenda.',
         type: 'info',
       });
       return;
@@ -161,11 +133,18 @@ export const CameraModal: React.FC = () => {
     }
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!selectedPhotoUrl) return;
     triggerHaptic();
+    let url = selectedPhotoUrl;
+    try {
+      url = await shrinkImage(selectedPhotoUrl);
+    } catch {
+      showToast({ title: 'Imagem inválida', description: 'Escolha outra foto.', type: 'warning' });
+      return;
+    }
     if (cameraCallback) {
-      cameraCallback(selectedPhotoUrl, caption || 'Registro fotográfico da bancada');
+      cameraCallback(url, caption.trim() || undefined, tag);
     }
     closeCamera();
   };
@@ -218,7 +197,7 @@ export const CameraModal: React.FC = () => {
                     Pronto para fotografar
                   </p>
                   <p className="text-xs text-stone-400 mt-1 max-w-xs mx-auto">
-                    Tire uma foto ao vivo, selecione do aparelho ou use um modelo de exemplo da oficina.
+                    Tire uma foto ao vivo ou selecione uma imagem do aparelho.
                   </p>
                 </div>
               </div>
@@ -278,37 +257,6 @@ export const CameraModal: React.FC = () => {
               onChange={handleFileUpload}
               className="hidden"
             />
-          </div>
-
-          {/* Lutherie Quick Test Presets (Instant Desktop Simulation) */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-stone-400 uppercase tracking-wider">
-                Exemplos Rápidos de Bancada (1 toque)
-              </span>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {PRESET_PHOTOS.map((preset) => (
-                <button
-                  key={preset.name}
-                  type="button"
-                  onClick={() => {
-                    triggerHaptic();
-                    setSelectedPhotoUrl(preset.url);
-                    setTag(preset.tag);
-                    setCaption(preset.caption);
-                  }}
-                  className={`text-left p-2 rounded-xl border text-xs transition-all ${
-                    selectedPhotoUrl === preset.url
-                      ? 'bg-amber-950/60 border-amber-600 text-amber-200 shadow-sm'
-                      : 'bg-stone-800/80 border-stone-700/60 text-stone-300 hover:bg-stone-800'
-                  }`}
-                >
-                  <p className="font-semibold truncate">{preset.name}</p>
-                  <span className="text-[10px] text-amber-500/90 capitalize">{preset.tag}</span>
-                </button>
-              ))}
-            </div>
           </div>
 
           {/* Tags & Caption (Only if photo is chosen) */}

@@ -29,7 +29,6 @@ export interface RolePermissions {
   canApproveClientQuote: boolean;
   canManageInventory: boolean;
   canViewFinancialTotals: boolean;
-  canResetDemoData: boolean;
   canViewAuditLogs: boolean;
 }
 
@@ -63,7 +62,6 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
     canApproveClientQuote: true,
     canManageInventory: true,
     canViewFinancialTotals: true,
-    canResetDemoData: true,
     canViewAuditLogs: true,
   },
 
@@ -96,44 +94,10 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
     canApproveClientQuote: false, // Performed by client or admin
     canManageInventory: false, // Reserved for Luthier/Admin
     canViewFinancialTotals: false, // Reserved for Luthier/Admin
-    canResetDemoData: false,
-    canViewAuditLogs: false,
-  },
-
-  cliente: {
-    role: 'cliente',
-    roleLabel: 'Cliente / Músico',
-    roleBadge: 'PORTAL',
-    roleDescription: 'Acompanha status, vê fotos do serviço e aprova orçamento em poucos toques sem senha.',
-
-    // Dedicated portal view only
-    canAccessToday: false,
-    canAccessOrders: false,
-    canAccessClients: false,
-    canAccessStock: false,
-    canAccessAgenda: false,
-    canAccessFinancials: false,
-    canAccessMessages: false,
-    canAccessConfig: false,
-    canAccessWorkbench: false,
-    canAccessClientPortal: true, // Exclusive client portal
-
-    // Permitted actions
-    canOpenOrder: false,
-    canRegisterClient: false,
-    canRegisterEntryPhoto: false,
-    canRegisterDelivery: false,
-    canExecuteBenchDiagnosis: false,
-    canExecuteBenchLabor: false,
-    canModifyPricingAndParts: false,
-    canApproveClientQuote: true, // 1-touch budget approval
-    canManageInventory: false,
-    canViewFinancialTotals: false,
-    canResetDemoData: false,
     canViewAuditLogs: false,
   },
 };
 
 export function getRolePermissions(role: UserRole): RolePermissions {
-  return ROLE_PERMISSIONS[role] || ROLE_PERMISSIONS.cliente;
+  return ROLE_PERMISSIONS[role] || ROLE_PERMISSIONS.atendente;
 }

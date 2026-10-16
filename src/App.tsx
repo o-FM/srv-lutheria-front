@@ -17,12 +17,14 @@ import { ClientsModule } from './components/clients/ClientsModule';
 import { StockModule } from './components/stock/StockModule';
 import { MoreModule } from './components/more/MoreModule';
 import { ClientPortalView } from './components/client-portal/ClientPortalView';
-import { ReauthBottomSheet } from './components/auth/ReauthBottomSheet';
+import { ResetPasswordPage } from './components/auth/ResetPasswordPage';
+import { SwitchUserSheet } from './components/auth/SwitchUserSheet';
 import { AccountSettingsModal } from './components/auth/AccountSettingsModal';
 import { ForgotPasswordModal } from './components/auth/ForgotPasswordModal';
 
 const MainLayout: React.FC = () => {
-  const { activeTab, setActiveTab, currentRole } = useApp();
+  const { activeTab, setActiveTab, currentRole, isDataLoading, orders, clients } = useApp();
+  const isFirstLoad = isDataLoading && orders.length === 0 && clients.length === 0;
 
   // Redirect away from restricted tabs
   React.useEffect(() => {
@@ -38,8 +40,11 @@ const MainLayout: React.FC = () => {
 
       {/* Main Content Area */}
       <main className="flex-1 w-full max-w-7xl mx-auto px-3.5 py-4 sm:px-6">
-        {currentRole === 'cliente' ? (
-          <ClientPortalView />
+        {isFirstLoad ? (
+          <div className="py-24 flex flex-col items-center text-stone-400 text-xs gap-2">
+            <div className="w-6 h-6 border-2 border-amber-600/30 border-t-amber-500 rounded-full animate-spin" />
+            Carregando dados da oficina...
+          </div>
         ) : (
           <>
             {activeTab === 'hoje' && <HomeModule />}
@@ -62,14 +67,24 @@ const MainLayout: React.FC = () => {
       <BarcodeScannerModal />
       <GlobalSearchModal />
       <ToastContainer />
-      <ReauthBottomSheet />
+      <SwitchUserSheet />
       <AccountSettingsModal />
       <ForgotPasswordModal />
     </div>
   );
 };
 
+/** Rotas públicas (links dos e-mails do backend) não passam pelo login. */
 export default function App() {
+  const path = window.location.pathname;
+  const portalMatch = path.match(/^\/acompanhar\/([A-Za-z0-9_-]{32})\/?$/);
+  if (portalMatch) {
+    return <ClientPortalView token={portalMatch[1]} />;
+  }
+  if (path.startsWith('/redefinir-senha')) {
+    return <ResetPasswordPage />;
+  }
+
   return (
     <AuthProvider>
       <AppProvider>

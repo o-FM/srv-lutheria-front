@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { PhotoImage } from '../common/PhotoImage';
 import {
   ClipboardList,
   Search,
@@ -178,9 +179,8 @@ export const OrdersModule: React.FC = () => {
                     <div className="flex items-start gap-3 min-w-0">
                       <div className="w-14 h-14 rounded-xl bg-stone-950 border border-stone-800 overflow-hidden shrink-0 flex items-center justify-center relative">
                         {hasPhoto ? (
-                          <img
-                            src={ord.photos[0].url}
-                            alt="Instrumento"
+                          <PhotoImage photo={ord.photos[0]}
+                              alt="Instrumento"
                             className="w-full h-full object-cover"
                           />
                         ) : (

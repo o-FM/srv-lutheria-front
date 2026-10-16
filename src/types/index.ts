@@ -1,4 +1,8 @@
-export type UserRole = 'luthier' | 'atendente' | 'cliente';
+/**
+ * Papel na interface: 'luthier' = bancada e gestão (perfis ADMIN e LUTHIER da API),
+ * 'atendente' = balcão (ATENDENTE e ESTOQUISTA). O cliente usa o portal público, sem login.
+ */
+export type UserRole = 'luthier' | 'atendente';
 
 export type InstrumentType =
   | 'violao_aco'
@@ -22,7 +26,10 @@ export type OrderStatus =
 
 export interface Photo {
   id: string;
+  /** data URL (foto ainda não enviada) ou URL pública (portal). */
   url: string;
+  /** Caminho da API que exige token (fotos da OS vistas pela equipe). */
+  authPath?: string;
   tag: 'entrada' | 'diagnostico' | 'bancada' | 'finalizado' | 'detalhe_defeito';
   caption: string;
   timestamp: string;
@@ -58,33 +65,33 @@ export interface Instrument {
 }
 
 export interface PartUsage {
+  id: string;
   stockItemId: string;
   stockItemName: string;
   quantity: number;
   unitPrice: number;
+  total: number;
 }
 
 export interface ServiceItem {
   id: string;
+  catalogId?: string;
   title: string;
   description?: string;
   laborPrice: number;
   done: boolean;
-  partsUsed: PartUsage[];
 }
 
 export interface Quote {
-  id: string;
-  orderId: string;
   laborTotal: number;
   partsTotal: number;
   discount: number;
   grandTotal: number;
-  status: 'pendente' | 'aprovado' | 'rejeitado';
+  status: 'pendente' | 'aprovado' | 'rejeitado' | null;
   sentAt?: string;
   answeredAt?: string;
   rejectionReason?: string;
-  paymentTerms: string;
+  paymentTerms?: string;
 }
 
 export interface TimelineEvent {
@@ -118,13 +125,30 @@ export interface Order {
   completedDate?: string;
   deliveredDate?: string;
   services: ServiceItem[];
+  parts: PartUsage[];
   quote?: Quote;
   photos: Photo[];
   timeline: TimelineEvent[];
+  payments: OrderPayment[];
   technicianNotes?: string;
   totalAmount: number;
   paidAmount: number;
+  balance: number;
   clientTrackingToken: string;
+  /** A listagem da API traz um resumo; serviços, peças e histórico vêm no detalhe. */
+  detailLoaded: boolean;
+  photosLoaded: boolean;
+}
+
+export type PaymentMethod = 'pix' | 'cartao_credito' | 'cartao_debito' | 'dinheiro' | 'transferencia';
+
+export interface OrderPayment {
+  id: string;
+  amount: number;
+  method: PaymentMethod;
+  date: string;
+  receiptNumber: string;
+  receivedBy: string;
 }
 
 export type StockCategory = 'pecas' | 'cordas' | 'madeiras' | 'insumos';
@@ -151,6 +175,8 @@ export interface StockMovement {
   date: string;
   type: 'entrada' | 'saida' | 'ajuste';
   quantity: number;
+  balanceAfter?: number;
+  createdBy?: string;
   orderId?: string;
   reason: string;
 }
@@ -163,10 +189,18 @@ export interface Payment {
   clientName: string;
   instrumentDescription: string;
   amount: number;
-  method: 'pix' | 'cartao_credito' | 'cartao_debito' | 'dinheiro' | 'transferencia';
+  method: PaymentMethod;
   date: string;
   receiptNumber: string;
   status: 'concluido' | 'pendente';
+}
+
+export interface CatalogItem {
+  id: string;
+  title: string;
+  description?: string;
+  laborPrice: number;
+  estimatedDays?: number;
 }
 
 export type SyncStatus = 'online' | 'sincronizando' | 'offline';

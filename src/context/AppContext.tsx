@@ -1,39 +1,54 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import confetti from 'canvas-confetti';
 import {
+  CatalogItem,
   Client,
   Instrument,
   Order,
   OrderStatus,
+  PaymentMethod,
+  Photo,
   StockItem,
-  Payment,
   StockMovement,
   UserRole,
   SyncStatus,
   ToastMessage,
-  Photo,
-  ServiceItem,
 } from '../types';
+import { api, CreateOrderRequest, InstrumentRequest, ProductRequest, UpdateOrderRequest } from '../services/api';
+import { ApiError } from '../services/http';
 import {
-  INITIAL_CLIENTS,
-  INITIAL_INSTRUMENTS,
-  INITIAL_ORDERS,
-  INITIAL_STOCK,
-  INITIAL_PAYMENTS,
-  INITIAL_MOVEMENTS,
-} from '../data/seedData';
+  toCatalogItem,
+  toClient,
+  toInstrument,
+  toMovement,
+  toOrder,
+  toOrderPhoto,
+  toStockItem,
+} from '../services/mappers';
+import { useAuth } from './AuthContext';
+
+export type CameraCallback = (photoUrl: string, caption?: string, tag?: Photo['tag']) => void;
+
+interface NewServiceInput {
+  catalogId?: string;
+  title?: string;
+  description?: string;
+  laborPrice?: number;
+}
 
 interface AppContextType {
-  // State
+  // Dados da oficina (vindos da API)
   clients: Client[];
   instruments: Instrument[];
   orders: Order[];
   stock: StockItem[];
-  payments: Payment[];
   stockMovements: StockMovement[];
+  catalog: CatalogItem[];
+  isDataLoading: boolean;
+
+  // Estado de interface
   currentRole: UserRole;
   syncStatus: SyncStatus;
-  offlineQueueCount: number;
   activeTab: string;
   searchQuery: string;
   recentSearches: string[];
@@ -43,15 +58,12 @@ interface AppContextType {
   isWorkbenchModeOpen: boolean;
   isDarkMode: boolean;
   toasts: ToastMessage[];
-
-  // Modals & Camera Callbacks
   isCameraModalOpen: boolean;
-  cameraCallback: ((photoUrl: string, caption?: string) => void) | null;
+  cameraCallback: CameraCallback | null;
+  cameraDefaultTag: Photo['tag'];
   isBarcodeModalOpen: boolean;
   barcodeCallback: ((code: string) => void) | null;
 
-  // Actions
-  setRole: (role: UserRole) => void;
   setActiveTab: (tab: string) => void;
   setSearchQuery: (query: string) => void;
   addRecentSearch: (query: string) => void;
@@ -61,35 +73,52 @@ interface AppContextType {
   setIsNewOrderWizardOpen: (open: boolean) => void;
   setIsWorkbenchModeOpen: (open: boolean) => void;
   toggleDarkMode: () => void;
-  toggleSyncStatus: () => void;
+  /** Recarrega tudo do servidor (botão de status de conexão). */
+  refreshData: () => Promise<void>;
   triggerHaptic: () => void;
-
-  // Toast
   showToast: (toast: Omit<ToastMessage, 'id'>) => void;
   dismissToast: (id: string) => void;
+  /** Mostra o erro da API num toast; devolve false para encadear em handlers. */
+  handleError: (error: unknown, title?: string) => false;
 
-  // Domain Actions
-  advanceOrderStatus: (orderId: string, specificStatus?: OrderStatus, note?: string) => void;
-  updateOrder: (orderId: string, updates: Partial<Order>) => void;
-  createOrder: (orderData: Partial<Order>, clientId: string, instrumentId: string) => Order;
-  addServiceItem: (orderId: string, service: Omit<ServiceItem, 'id'>) => void;
-  toggleServiceDone: (orderId: string, serviceId: string) => void;
-  addOrderPhoto: (orderId: string, photo: Omit<Photo, 'id' | 'timestamp'>) => void;
-  approveQuote: (orderId: string) => void;
-  rejectQuote: (orderId: string, reason: string) => void;
+  // Ordens de serviço
+  loadOrderDetail: (orderId: string) => Promise<void>;
+  advanceOrderStatus: (orderId: string, specificStatus?: OrderStatus, note?: string) => Promise<boolean>;
+  updateOrder: (orderId: string, updates: UpdateOrderRequest) => Promise<boolean>;
+  createOrder: (
+    data: Omit<CreateOrderRequest, 'customerId' | 'instrumentId'> & { photos?: Photo[] },
+    clientId: string,
+    instrumentId: string
+  ) => Promise<Order | null>;
+  addServiceItem: (orderId: string, service: NewServiceInput) => Promise<boolean>;
+  removeServiceItem: (orderId: string, itemId: string) => Promise<boolean>;
+  toggleServiceDone: (orderId: string, serviceId: string) => Promise<boolean>;
+  addPart: (orderId: string, productId: string, quantity: number) => Promise<boolean>;
+  removePart: (orderId: string, partId: string) => Promise<boolean>;
+  addOrderPhoto: (orderId: string, photo: { url: string; tag: Photo['tag']; caption?: string }) => Promise<boolean>;
+  removeOrderPhoto: (orderId: string, photoId: string) => Promise<boolean>;
+  approveQuote: (orderId: string) => Promise<boolean>;
+  rejectQuote: (orderId: string, reason: string) => Promise<boolean>;
+  addNote: (orderId: string, note: string) => Promise<boolean>;
+  recordPayment: (orderId: string, amount: number, method: PaymentMethod) => Promise<boolean>;
 
-  createClient: (clientData: Omit<Client, 'id' | 'createdAt'>) => Client;
-  createInstrument: (instrumentData: Omit<Instrument, 'id' | 'createdAt' | 'photos'>, photos?: Photo[]) => Instrument;
+  // Clientes e instrumentos
+  createClient: (data: { name: string; phone: string; email?: string; cpf?: string; address?: string; notes?: string }) => Promise<Client | null>;
+  createInstrument: (clientId: string, data: InstrumentRequest) => Promise<Instrument | null>;
 
-  updateStockQuantity: (stockItemId: string, delta: number, reason: string, orderId?: string) => void;
-  recordPayment: (payment: Omit<Payment, 'id' | 'receiptNumber'>) => Payment;
+  // Estoque
+  updateStockQuantity: (stockItemId: string, delta: number, reason: string, orderId?: string) => Promise<boolean>;
+  createProduct: (data: ProductRequest) => Promise<StockItem | null>;
+  loadStockMovements: () => Promise<void>;
 
-  openCamera: (callback: (photoUrl: string, caption?: string) => void) => void;
+  // Catálogo de serviços
+  saveCatalogItem: (data: Omit<CatalogItem, 'id'>, id?: string) => Promise<boolean>;
+  removeCatalogItem: (id: string) => Promise<boolean>;
+
+  openCamera: (callback: CameraCallback, defaultTag?: Photo['tag']) => void;
   closeCamera: () => void;
   openBarcodeScanner: (callback: (code: string) => void) => void;
   closeBarcodeScanner: () => void;
-
-  resetToDefaults: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -104,100 +133,98 @@ const STATUS_FLOW: OrderStatus[] = [
   'entregue',
 ];
 
+const STATUS_LABELS: Record<OrderStatus, string> = {
+  recebido: 'Recebido',
+  diagnostico: 'Diagnóstico',
+  orcamento: 'Orçamento',
+  aguardando_aprovacao: 'Aguardando aprovação',
+  em_execucao: 'Em execução',
+  pronto: 'Pronto',
+  entregue: 'Entregue',
+  cancelado: 'Cancelado',
+};
+
+const isOpen = (o: Order) => o.status !== 'entregue' && o.status !== 'cancelado';
+
+/** Executa tarefas com no máximo {@code limit} em paralelo. */
+async function pooled<T>(items: T[], limit: number, task: (item: T) => Promise<void>) {
+  const queue = [...items];
+  const workers = Array.from({ length: Math.min(limit, queue.length) }, async () => {
+    while (queue.length) {
+      const next = queue.shift()!;
+      await task(next).catch(() => undefined);
+    }
+  });
+  await Promise.all(workers);
+}
+
+function celebrate(particleCount = 50) {
+  try {
+    confetti({ particleCount, spread: 60, origin: { y: 0.8 } });
+  } catch {
+    // ignore
+  }
+}
+
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // Load from localStorage or seed
-  const [clients, setClients] = useState<Client[]>(() => {
-    const saved = localStorage.getItem('luthier_clients');
-    return saved ? JSON.parse(saved) : INITIAL_CLIENTS;
-  });
+  const { user } = useAuth();
 
-  const [instruments, setInstruments] = useState<Instrument[]>(() => {
-    const saved = localStorage.getItem('luthier_instruments');
-    return saved ? JSON.parse(saved) : INITIAL_INSTRUMENTS;
-  });
+  const [clients, setClients] = useState<Client[]>([]);
+  const [instruments, setInstruments] = useState<Instrument[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [stock, setStock] = useState<StockItem[]>([]);
+  const [stockMovements, setStockMovements] = useState<StockMovement[]>([]);
+  const [catalog, setCatalog] = useState<CatalogItem[]>([]);
+  const [isDataLoading, setIsDataLoading] = useState(false);
 
-  const [orders, setOrders] = useState<Order[]>(() => {
-    const saved = localStorage.getItem('luthier_orders');
-    return saved ? JSON.parse(saved) : INITIAL_ORDERS;
-  });
-
-  const [stock, setStock] = useState<StockItem[]>(() => {
-    const saved = localStorage.getItem('luthier_stock');
-    return saved ? JSON.parse(saved) : INITIAL_STOCK;
-  });
-
-  const [payments, setPayments] = useState<Payment[]>(() => {
-    const saved = localStorage.getItem('luthier_payments');
-    return saved ? JSON.parse(saved) : INITIAL_PAYMENTS;
-  });
-
-  const [stockMovements, setStockMovements] = useState<StockMovement[]>(() => {
-    const saved = localStorage.getItem('luthier_movements');
-    return saved ? JSON.parse(saved) : INITIAL_MOVEMENTS;
-  });
-
-  // UI state
-  const [currentRole, setRoleState] = useState<UserRole>('luthier');
-  const [syncStatus, setSyncStatus] = useState<SyncStatus>('online');
-  const [offlineQueueCount, setOfflineQueueCount] = useState<number>(0);
+  const [isOnline, setIsOnline] = useState<boolean>(() => navigator.onLine);
   const [activeTab, setActiveTab] = useState<string>('hoje');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [recentSearches, setRecentSearches] = useState<string[]>([
-    'Stratocaster',
-    'Lucas Silveira',
-    'OS 1042',
-    'Cavalete',
-  ]);
+  const [recentSearches, setRecentSearches] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('luthier_recent_searches') || '[]');
+    } catch {
+      return [];
+    }
+  });
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
   const [isNewOrderWizardOpen, setIsNewOrderWizardOpen] = useState<boolean>(false);
   const [isWorkbenchModeOpen, setIsWorkbenchModeOpen] = useState<boolean>(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => localStorage.getItem('luthier_dark_mode') === 'true');
 
-  // Dark mode
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
-    return localStorage.getItem('luthier_dark_mode') === 'true';
-  });
-
-  // Modals
   const [isCameraModalOpen, setIsCameraModalOpen] = useState<boolean>(false);
-  const [cameraCallback, setCameraCallback] = useState<((photoUrl: string, caption?: string) => void) | null>(null);
+  const [cameraCallback, setCameraCallback] = useState<CameraCallback | null>(null);
+  const [cameraDefaultTag, setCameraDefaultTag] = useState<Photo['tag']>('bancada');
   const [isBarcodeModalOpen, setIsBarcodeModalOpen] = useState<boolean>(false);
   const [barcodeCallback, setBarcodeCallback] = useState<((code: string) => void) | null>(null);
 
-  // Sync to localStorage
-  useEffect(() => {
-    localStorage.setItem('luthier_clients', JSON.stringify(clients));
-  }, [clients]);
+  const currentRole: UserRole = user?.role ?? 'atendente';
+  const ordersRef = useRef<Order[]>([]);
+  ordersRef.current = orders;
+
+  const syncStatus: SyncStatus = !isOnline ? 'offline' : isDataLoading ? 'sincronizando' : 'online';
 
   useEffect(() => {
-    localStorage.setItem('luthier_instruments', JSON.stringify(instruments));
-  }, [instruments]);
-
-  useEffect(() => {
-    localStorage.setItem('luthier_orders', JSON.stringify(orders));
-  }, [orders]);
-
-  useEffect(() => {
-    localStorage.setItem('luthier_stock', JSON.stringify(stock));
-  }, [stock]);
-
-  useEffect(() => {
-    localStorage.setItem('luthier_payments', JSON.stringify(payments));
-  }, [payments]);
-
-  useEffect(() => {
-    localStorage.setItem('luthier_movements', JSON.stringify(stockMovements));
-  }, [stockMovements]);
+    const on = () => setIsOnline(true);
+    const off = () => setIsOnline(false);
+    window.addEventListener('online', on);
+    window.addEventListener('offline', off);
+    return () => {
+      window.removeEventListener('online', on);
+      window.removeEventListener('offline', off);
+    };
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('luthier_dark_mode', String(isDarkMode));
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    document.documentElement.classList.toggle('dark', isDarkMode);
   }, [isDarkMode]);
+
+  useEffect(() => {
+    localStorage.setItem('luthier_recent_searches', JSON.stringify(recentSearches));
+  }, [recentSearches]);
 
   const triggerHaptic = useCallback(() => {
     if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
@@ -211,69 +238,433 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const showToast = useCallback((toast: Omit<ToastMessage, 'id'>) => {
     const id = 'toast-' + Math.random().toString(36).substring(2, 9);
-    const newToast: ToastMessage = { ...toast, id };
-    setToasts((prev) => [...prev, newToast]);
-
-    const duration = toast.duration ?? 4500;
+    setToasts((prev) => [...prev, { ...toast, id }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, duration);
+    }, toast.duration ?? 4500);
   }, []);
 
   const dismissToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
+  const handleError = useCallback(
+    (error: unknown, title = 'Não foi possível concluir'): false => {
+      const description = error instanceof ApiError || error instanceof Error ? error.message : undefined;
+      showToast({ title, description, type: 'error', duration: 6000 });
+      return false;
+    },
+    [showToast]
+  );
+
+  // ---------------- carga inicial ----------------
+
+  const putOrder = useCallback((order: Order) => {
+    setOrders((prev) => {
+      const old = prev.find((o) => o.id === order.id);
+      // Fotos vêm de outra rota: não perder as que já estão carregadas no estado
+      const merged =
+        old && old.photosLoaded && !order.photosLoaded
+          ? { ...order, photos: old.photos, photosLoaded: true }
+          : order;
+      const next = old ? prev.map((o) => (o.id === order.id ? merged : o)) : [merged, ...prev];
+      return next.sort((a, b) => b.orderNumber - a.orderNumber);
+    });
+  }, []);
+
+  const applyOrder = useCallback(
+    (dto: Parameters<typeof toOrder>[0]) => {
+      const order = toOrder(dto, ordersRef.current.find((o) => o.id === dto.id));
+      putOrder(order);
+      return order;
+    },
+    [putOrder]
+  );
+
+  const loadPhotos = useCallback(async (orderId: string) => {
+    const photos = await api.orders.photos(orderId);
+    setOrders((prev) =>
+      prev.map((o) =>
+        o.id === orderId ? { ...o, photos: photos.map((p) => toOrderPhoto(orderId, p)), photosLoaded: true } : o
+      )
+    );
+  }, []);
+
+  const loadOrderDetail = useCallback(
+    async (orderId: string) => {
+      try {
+        const [dto] = await Promise.all([api.orders.get(orderId), loadPhotos(orderId)]);
+        applyOrder(dto);
+      } catch (e) {
+        handleError(e, 'Falha ao carregar a OS');
+      }
+    },
+    [applyOrder, loadPhotos, handleError]
+  );
+
+  const refreshData = useCallback(async () => {
+    setIsDataLoading(true);
+    try {
+      const [customers, orderPage, products, catalogItems] = await Promise.all([
+        api.customers.all(),
+        api.orders.all(),
+        api.products.all(),
+        api.catalog.list(),
+      ]);
+      setClients(customers.map(toClient));
+      setInstruments(customers.flatMap((c) => (c.instruments || []).map(toInstrument)));
+      setStock(products.map(toStockItem));
+      setCatalog(catalogItems.map(toCatalogItem));
+
+      const previous = new Map(ordersRef.current.map((o) => [o.id, o]));
+      const summaries = orderPage.map((o) => toOrder(o, previous.get(o.id), false));
+      setOrders(summaries);
+      ordersRef.current = summaries;
+
+      // OS em andamento: detalhe completo (serviços, peças, histórico) para bancada e painéis
+      await pooled(summaries.filter(isOpen).map((o) => o.id), 6, async (id) => {
+        const dto = await api.orders.get(id);
+        putOrder(toOrder(dto, ordersRef.current.find((o) => o.id === id)));
+      });
+    } catch (e) {
+      handleError(e, 'Falha ao carregar os dados da oficina');
+    } finally {
+      setIsDataLoading(false);
+    }
+  }, [handleError, putOrder]);
+
+  useEffect(() => {
+    setActiveOrderId(null);
+    setActiveTab('hoje');
+    if (user) {
+      refreshData();
+    } else {
+      setClients([]);
+      setInstruments([]);
+      setOrders([]);
+      setStock([]);
+      setStockMovements([]);
+      setCatalog([]);
+    }
+    // Recarrega quando muda o usuário (login, troca de usuário no aparelho)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
+  // ---------------- ações sobre a OS ----------------
+
+  const run = useCallback(
+    async (action: () => Promise<unknown>, errorTitle?: string): Promise<boolean> => {
+      try {
+        await action();
+        return true;
+      } catch (e) {
+        return handleError(e, errorTitle);
+      }
+    },
+    [handleError]
+  );
+
+  const advanceOrderStatus = useCallback(
+    async (orderId: string, specificStatus?: OrderStatus, note?: string) => {
+      triggerHaptic();
+      const order = ordersRef.current.find((o) => o.id === orderId);
+      if (!order) return false;
+
+      let target = specificStatus;
+      if (!target) {
+        const idx = STATUS_FLOW.indexOf(order.status);
+        if (idx < 0 || idx >= STATUS_FLOW.length - 1) return false;
+        target = STATUS_FLOW[idx + 1];
+      }
+      if (target === order.status) return false;
+
+      return run(async () => {
+        // Orçamento tem rotas próprias: enviar (aguardar aprovação) e aprovar (inicia execução)
+        let dto;
+        if (target === 'aguardando_aprovacao') {
+          dto = await api.orders.sendQuote(orderId);
+        } else if (order.status === 'aguardando_aprovacao' && target === 'em_execucao') {
+          dto = await api.orders.approveQuote(orderId);
+        } else {
+          dto = await api.orders.changeStatus(orderId, target!, note);
+        }
+        applyOrder(dto);
+        if (target === 'pronto' || target === 'entregue') celebrate();
+        showToast({
+          title: `OS #${order.orderNumber}: ${STATUS_LABELS[target!]}`,
+          description: 'Alteração registrada na linha do tempo.',
+          type: 'success',
+        });
+      }, `OS #${order.orderNumber} não avançou`);
+    },
+    [run, applyOrder, showToast, triggerHaptic]
+  );
+
+  const updateOrder = useCallback(
+    (orderId: string, updates: UpdateOrderRequest) =>
+      run(async () => applyOrder(await api.orders.update(orderId, updates)), 'Falha ao salvar a OS'),
+    [run, applyOrder]
+  );
+
+  const createOrder = useCallback<AppContextType['createOrder']>(
+    async (data, clientId, instrumentId) => {
+      triggerHaptic();
+      try {
+        const { photos = [], ...body } = data;
+        const dto = await api.orders.create({ ...body, customerId: clientId, instrumentId });
+        let order = applyOrder(dto);
+        // Fotos de entrada tiradas no wizard: enviadas depois que a OS existe
+        for (const ph of photos) {
+          try {
+            await api.orders.addPhoto(order.id, { tag: ph.tag, caption: ph.caption, dataUrl: ph.url });
+          } catch (e) {
+            handleError(e, 'Uma foto de entrada não foi enviada');
+          }
+        }
+        if (photos.length) {
+          await loadPhotos(order.id);
+          order = applyOrder(await api.orders.get(order.id));
+        }
+        showToast({
+          title: `OS #${order.orderNumber} aberta com sucesso!`,
+          description: 'Pronta para diagnóstico e envio de link ao cliente.',
+          type: 'success',
+        });
+        return order;
+      } catch (e) {
+        handleError(e, 'Falha ao abrir a OS');
+        return null;
+      }
+    },
+    [applyOrder, handleError, loadPhotos, showToast, triggerHaptic]
+  );
+
+  const addServiceItem = useCallback(
+    (orderId: string, service: NewServiceInput) =>
+      run(async () => applyOrder(await api.orders.addService(orderId, service)), 'Serviço não adicionado'),
+    [run, applyOrder]
+  );
+
+  const removeServiceItem = useCallback(
+    (orderId: string, itemId: string) =>
+      run(async () => applyOrder(await api.orders.removeService(orderId, itemId)), 'Serviço não removido'),
+    [run, applyOrder]
+  );
+
+  const toggleServiceDone = useCallback(
+    async (orderId: string, serviceId: string) => {
+      triggerHaptic();
+      const order = ordersRef.current.find((o) => o.id === orderId);
+      const service = order?.services.find((s) => s.id === serviceId);
+      if (service?.done) {
+        showToast({ title: 'Serviço já concluído', type: 'info', duration: 2500 });
+        return false;
+      }
+      return run(async () => applyOrder(await api.orders.markServiceDone(orderId, serviceId)), 'Serviço não concluído');
+    },
+    [run, applyOrder, showToast, triggerHaptic]
+  );
+
+  const addPart = useCallback(
+    (orderId: string, productId: string, quantity: number) =>
+      run(async () => applyOrder(await api.orders.addPart(orderId, productId, quantity)), 'Peça não adicionada'),
+    [run, applyOrder]
+  );
+
+  const removePart = useCallback(
+    (orderId: string, partId: string) =>
+      run(async () => applyOrder(await api.orders.removePart(orderId, partId)), 'Peça não removida'),
+    [run, applyOrder]
+  );
+
+  const addOrderPhoto = useCallback(
+    (orderId: string, photo: { url: string; tag: Photo['tag']; caption?: string }) =>
+      run(async () => {
+        await api.orders.addPhoto(orderId, { tag: photo.tag, caption: photo.caption, dataUrl: photo.url });
+        await loadPhotos(orderId);
+        applyOrder(await api.orders.get(orderId));
+        showToast({
+          title: 'Foto registrada com sucesso',
+          description: 'Disponível na galeria e no portal do cliente.',
+          type: 'success',
+        });
+      }, 'Foto não enviada'),
+    [run, loadPhotos, applyOrder, showToast]
+  );
+
+  const removeOrderPhoto = useCallback(
+    (orderId: string, photoId: string) =>
+      run(async () => {
+        await api.orders.removePhoto(orderId, photoId);
+        await loadPhotos(orderId);
+      }, 'Foto não removida'),
+    [run, loadPhotos]
+  );
+
+  const approveQuote = useCallback(
+    (orderId: string) =>
+      run(async () => {
+        triggerHaptic();
+        applyOrder(await api.orders.approveQuote(orderId));
+        celebrate(70);
+        showToast({ title: 'Orçamento aprovado!', description: 'OS liberada para execução na bancada.', type: 'success' });
+      }, 'Orçamento não aprovado'),
+    [run, applyOrder, showToast, triggerHaptic]
+  );
+
+  const rejectQuote = useCallback(
+    (orderId: string, reason: string) =>
+      run(async () => {
+        applyOrder(await api.orders.rejectQuote(orderId, reason));
+        showToast({ title: 'Recusa registrada', description: 'A OS voltou para orçamento.', type: 'warning' });
+      }, 'Recusa não registrada'),
+    [run, applyOrder, showToast]
+  );
+
+  const addNote = useCallback(
+    (orderId: string, note: string) =>
+      run(async () => applyOrder(await api.orders.addNote(orderId, note)), 'Observação não salva'),
+    [run, applyOrder]
+  );
+
+  const recordPayment = useCallback(
+    (orderId: string, amount: number, method: PaymentMethod) =>
+      run(async () => {
+        triggerHaptic();
+        const order = applyOrder(await api.orders.receivePayment(orderId, amount, method));
+        const receipt = order.payments[order.payments.length - 1]?.receiptNumber;
+        celebrate(40);
+        showToast({
+          title: `Pagamento de R$ ${amount.toFixed(2)} registrado!`,
+          description: receipt ? `Recibo ${receipt}` : undefined,
+          type: 'success',
+        });
+      }, 'Pagamento não registrado'),
+    [run, applyOrder, showToast, triggerHaptic]
+  );
+
+  // ---------------- clientes ----------------
+
+  const createClient = useCallback<AppContextType['createClient']>(
+    async (data) => {
+      triggerHaptic();
+      try {
+        const dto = await api.customers.create({
+          name: data.name,
+          phone: data.phone,
+          email: data.email || undefined,
+          cpf: data.cpf || undefined,
+          address: data.address || undefined,
+          notes: data.notes || undefined,
+        });
+        const client = toClient(dto);
+        setClients((prev) => [client, ...prev]);
+        showToast({ title: `Cliente ${client.name} cadastrado`, type: 'success' });
+        return client;
+      } catch (e) {
+        handleError(e, 'Cliente não cadastrado');
+        return null;
+      }
+    },
+    [handleError, showToast, triggerHaptic]
+  );
+
+  const createInstrument = useCallback<AppContextType['createInstrument']>(
+    async (clientId, data) => {
+      triggerHaptic();
+      try {
+        const inst = toInstrument(await api.customers.addInstrument(clientId, data));
+        setInstruments((prev) => [inst, ...prev]);
+        showToast({ title: `${inst.brand} ${inst.model} registrado`, type: 'success' });
+        return inst;
+      } catch (e) {
+        handleError(e, 'Instrumento não cadastrado');
+        return null;
+      }
+    },
+    [handleError, showToast, triggerHaptic]
+  );
+
+  // ---------------- estoque ----------------
+
+  const updateStockQuantity = useCallback(
+    async (stockItemId: string, delta: number, reason: string, orderId?: string) => {
+      if (delta === 0) return false;
+      triggerHaptic();
+      return run(async () => {
+        const mov = await api.products.move(stockItemId, {
+          type: delta > 0 ? 'entrada' : 'saida',
+          quantity: Math.abs(delta),
+          reason,
+          orderId,
+        });
+        const item = stock.find((s) => s.id === stockItemId);
+        setStock((prev) =>
+          prev.map((s) => (s.id === stockItemId ? { ...s, currentQuantity: mov.balanceAfter } : s))
+        );
+        setStockMovements((prev) => [toMovement(mov, item?.name || ''), ...prev]);
+      }, 'Estoque não atualizado');
+    },
+    [run, stock, triggerHaptic]
+  );
+
+  const createProduct = useCallback<AppContextType['createProduct']>(
+    async (data) => {
+      try {
+        const item = toStockItem(await api.products.create(data));
+        setStock((prev) => [...prev, item].sort((a, b) => a.name.localeCompare(b.name)));
+        showToast({ title: `${item.name} cadastrado no estoque`, type: 'success' });
+        return item;
+      } catch (e) {
+        handleError(e, 'Item não cadastrado');
+        return null;
+      }
+    },
+    [handleError, showToast]
+  );
+
+  const loadStockMovements = useCallback(async () => {
+    const collected: StockMovement[] = [];
+    await pooled(stock, 6, async (item) => {
+      const page = await api.products.movements(item.id, 10);
+      collected.push(...page.content.map((m) => toMovement(m, item.name)));
+    });
+    collected.sort((a, b) => b.date.localeCompare(a.date));
+    setStockMovements(collected.slice(0, 100));
+  }, [stock]);
+
+  // ---------------- catálogo ----------------
+
+  const saveCatalogItem = useCallback(
+    (data: Omit<CatalogItem, 'id'>, id?: string) =>
+      run(async () => {
+        const body = {
+          title: data.title,
+          description: data.description || undefined,
+          laborPrice: data.laborPrice,
+          estimatedDays: data.estimatedDays,
+        };
+        const saved = toCatalogItem(id ? await api.catalog.update(id, body) : await api.catalog.create(body));
+        setCatalog((prev) => (id ? prev.map((c) => (c.id === id ? saved : c)) : [...prev, saved]));
+      }, 'Serviço do catálogo não salvo'),
+    [run]
+  );
+
+  const removeCatalogItem = useCallback(
+    (id: string) =>
+      run(async () => {
+        await api.catalog.remove(id);
+        setCatalog((prev) => prev.filter((c) => c.id !== id));
+      }, 'Serviço do catálogo não removido'),
+    [run]
+  );
+
+  // ---------------- interface ----------------
+
   const toggleDarkMode = useCallback(() => {
     setIsDarkMode((prev) => !prev);
     triggerHaptic();
   }, [triggerHaptic]);
-
-  const toggleSyncStatus = useCallback(() => {
-    triggerHaptic();
-    setSyncStatus((prev) => {
-      if (prev === 'online') {
-        showToast({
-          title: 'Modo Offline Ativado',
-          description: 'Ações da oficina serão enfileiradas e salvas localmente.',
-          type: 'info',
-        });
-        return 'offline';
-      }
-      if (prev === 'offline') {
-        setSyncStatus('sincronizando');
-        setTimeout(() => {
-          setSyncStatus('online');
-          setOfflineQueueCount(0);
-          showToast({
-            title: 'Sincronização Concluída',
-            description: 'Todas as ordens e fotos foram sincronizadas com sucesso.',
-            type: 'success',
-          });
-        }, 1200);
-        return 'sincronizando';
-      }
-      return 'online';
-    });
-  }, [triggerHaptic, showToast]);
-
-  const setRole = useCallback(
-    (role: UserRole) => {
-      setRoleState(role);
-      triggerHaptic();
-      const roleLabels: Record<UserRole, string> = {
-        luthier: 'Luthier / Dono (Bancada & Gestão)',
-        atendente: 'Atendente / Balcão (Recepção & OS Rápida)',
-        cliente: 'Visão do Cliente (Portal sem senha)',
-      };
-      showToast({
-        title: `Perfil alterado para ${roleLabels[role]}`,
-        type: 'info',
-        duration: 2500,
-      });
-    },
-    [triggerHaptic, showToast]
-  );
 
   const addRecentSearch = useCallback((query: string) => {
     if (!query.trim()) return;
@@ -283,552 +674,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
   }, []);
 
-  const clearRecentSearches = useCallback(() => {
-    setRecentSearches([]);
-  }, []);
+  const clearRecentSearches = useCallback(() => setRecentSearches([]), []);
 
-  // Update Stock with log
-  const updateStockQuantity = useCallback(
-    (stockItemId: string, delta: number, reason: string, orderId?: string) => {
-      setStock((prev) =>
-        prev.map((item) => {
-          if (item.id === stockItemId) {
-            const newQty = Math.max(0, item.currentQuantity + delta);
-            return { ...item, currentQuantity: newQty };
-          }
-          return item;
-        })
-      );
-
-      const targetItem = stock.find((s) => s.id === stockItemId);
-      if (targetItem) {
-        const movement: StockMovement = {
-          id: 'mov-' + Date.now(),
-          stockItemId,
-          stockItemName: targetItem.name,
-          date: new Date().toISOString().replace('T', ' ').substring(0, 16),
-          type: delta > 0 ? 'entrada' : delta < 0 ? 'saida' : 'ajuste',
-          quantity: Math.abs(delta),
-          orderId,
-          reason,
-        };
-        setStockMovements((prev) => [movement, ...prev]);
-      }
-    },
-    [stock]
-  );
-
-  // Advance Order Status
-  const advanceOrderStatus = useCallback(
-    (orderId: string, specificStatus?: OrderStatus, note?: string) => {
-      triggerHaptic();
-
-      setOrders((prev) => {
-        const order = prev.find((o) => o.id === orderId);
-        if (!order) return prev;
-
-        const previousOrder = { ...order };
-        let nextStatus: OrderStatus;
-
-        if (specificStatus) {
-          nextStatus = specificStatus;
-        } else {
-          const currentIndex = STATUS_FLOW.indexOf(order.status);
-          if (currentIndex < 0 || currentIndex >= STATUS_FLOW.length - 1) {
-            return prev; // already delivered or invalid
-          }
-          nextStatus = STATUS_FLOW[currentIndex + 1];
-        }
-
-        // Business rule: Can only go to 'em_execucao' if quote is approved or no quote needed
-        if (nextStatus === 'em_execucao' && order.quote && order.quote.status !== 'aprovado') {
-          showToast({
-            title: 'Orçamento Pendente',
-            description: 'A OS só pode ir para execução após a aprovação formal do cliente.',
-            type: 'warning',
-          });
-          return prev;
-        }
-
-        // Timeline event title & user description
-        const userLabel =
-          currentRole === 'luthier'
-            ? 'Armando (Luthier)'
-            : currentRole === 'atendente'
-            ? 'Mariana (Balcão)'
-            : 'Cliente';
-
-        const statusDescriptions: Record<OrderStatus, string> = {
-          recebido: 'Instrumento acolhido na recepção',
-          diagnostico: 'Instrumento posicionado na bancada para diagnóstico',
-          orcamento: 'Orçamento detalhado elaborado',
-          aguardando_aprovacao: 'Orçamento encaminhado para aprovação do cliente',
-          em_execucao: 'Mãos à obra! Serviços iniciados na bancada',
-          pronto: 'Serviços finalizados, instrumento limpo e pronto para retirada',
-          entregue: 'Instrumento entregue ao músico com sucesso',
-          cancelado: 'Ordem de serviço cancelada',
-        };
-
-        const newTimelineEvent = {
-          id: 'tl-' + Date.now(),
-          timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
-          type: 'status_change' as const,
-          title: `Status alterado para ${nextStatus.toUpperCase()}`,
-          description: note || statusDescriptions[nextStatus],
-          user: userLabel,
-        };
-
-        // If completed or delivered, set dates
-        const completedDate = nextStatus === 'pronto' ? new Date().toISOString().substring(0, 10) : order.completedDate;
-        const deliveredDate = nextStatus === 'entregue' ? new Date().toISOString().substring(0, 10) : order.deliveredDate;
-
-        // If moving to 'em_execucao', automatically deduct parts used from stock
-        if (nextStatus === 'em_execucao') {
-          order.services.forEach((service) => {
-            service.partsUsed.forEach((part) => {
-              updateStockQuantity(
-                part.stockItemId,
-                -part.quantity,
-                `Baixa automática: OS #${order.orderNumber} em execução`,
-                order.id
-              );
-            });
-          });
-        }
-
-        // If delivered, play celebratory confetti
-        if (nextStatus === 'pronto' || nextStatus === 'entregue') {
-          try {
-            confetti({
-              particleCount: 50,
-              spread: 60,
-              origin: { y: 0.8 },
-            });
-          } catch {
-            // ignore
-          }
-        }
-
-        // Setup undo toast
-        showToast({
-          title: `OS #${order.orderNumber} avançou para ${nextStatus}`,
-          description: 'Alteração registrada na linha do tempo.',
-          type: 'success',
-          undoLabel: 'Desfazer',
-          undoAction: () => {
-            setOrders((current) =>
-              current.map((item) => (item.id === orderId ? previousOrder : item))
-            );
-            showToast({
-              title: `OS #${order.orderNumber} restaurada`,
-              description: `Status voltou para ${previousOrder.status}`,
-              type: 'info',
-            });
-          },
-        });
-
-        if (syncStatus === 'offline') {
-          setOfflineQueueCount((c) => c + 1);
-        }
-
-        return prev.map((item) =>
-          item.id === orderId
-            ? {
-                ...item,
-                status: nextStatus,
-                completedDate,
-                deliveredDate,
-                timeline: [newTimelineEvent, ...item.timeline],
-              }
-            : item
-        );
-      });
-    },
-    [currentRole, triggerHaptic, showToast, updateStockQuantity, syncStatus]
-  );
-
-  const updateOrder = useCallback((orderId: string, updates: Partial<Order>) => {
-    setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, ...updates } : o))
-    );
-  }, []);
-
-  const addServiceItem = useCallback(
-    (orderId: string, serviceData: Omit<ServiceItem, 'id'>) => {
-      const newService: ServiceItem = {
-        ...serviceData,
-        id: 'srv-' + Date.now(),
-      };
-
-      setOrders((prev) =>
-        prev.map((order) => {
-          if (order.id !== orderId) return order;
-          const updatedServices = [...order.services, newService];
-          const laborTotal = updatedServices.reduce((acc, s) => acc + s.laborPrice, 0);
-          const partsTotal = updatedServices.reduce(
-            (acc, s) => acc + s.partsUsed.reduce((pAcc, p) => pAcc + p.unitPrice * p.quantity, 0),
-            0
-          );
-          const grandTotal = laborTotal + partsTotal;
-
-          return {
-            ...order,
-            services: updatedServices,
-            totalAmount: grandTotal,
-            quote: order.quote
-              ? {
-                  ...order.quote,
-                  laborTotal,
-                  partsTotal,
-                  grandTotal: grandTotal - (order.quote.discount || 0),
-                }
-              : order.quote,
-          };
-        })
-      );
-    },
-    []
-  );
-
-  const toggleServiceDone = useCallback(
-    (orderId: string, serviceId: string) => {
-      triggerHaptic();
-      setOrders((prev) =>
-        prev.map((order) => {
-          if (order.id !== orderId) return order;
-          const updatedServices = order.services.map((s) =>
-            s.id === serviceId ? { ...s, done: !s.done } : s
-          );
-          return {
-            ...order,
-            services: updatedServices,
-          };
-        })
-      );
-    },
-    [triggerHaptic]
-  );
-
-  const addOrderPhoto = useCallback(
-    (orderId: string, photoData: Omit<Photo, 'id' | 'timestamp'>) => {
-      const newPhoto: Photo = {
-        ...photoData,
-        id: 'ph-' + Date.now(),
-        timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
-      };
-
-      setOrders((prev) =>
-        prev.map((order) => {
-          if (order.id !== orderId) return order;
-          return {
-            ...order,
-            photos: [newPhoto, ...order.photos],
-            timeline: [
-              {
-                id: 'tl-' + Date.now(),
-                timestamp: newPhoto.timestamp,
-                type: 'photo_added',
-                title: `Nova foto adicionada: ${newPhoto.tag}`,
-                description: newPhoto.caption,
-                user: currentRole === 'luthier' ? 'Armando (Luthier)' : 'Mariana (Balcão)',
-              },
-              ...order.timeline,
-            ],
-          };
-        })
-      );
-
-      showToast({
-        title: 'Foto registrada com sucesso',
-        description: 'Disponível na galeria e no portal do cliente.',
-        type: 'success',
-      });
-    },
-    [currentRole, showToast]
-  );
-
-  const approveQuote = useCallback(
-    (orderId: string) => {
-      triggerHaptic();
-      try {
-        confetti({
-          particleCount: 70,
-          spread: 70,
-          origin: { y: 0.6 },
-        });
-      } catch {
-        // ignore
-      }
-
-      setOrders((prev) =>
-        prev.map((order) => {
-          if (order.id !== orderId) return order;
-          const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 16);
-
-          // Deduct parts
-          order.services.forEach((service) => {
-            service.partsUsed.forEach((part) => {
-              updateStockQuantity(
-                part.stockItemId,
-                -part.quantity,
-                `Aprovação de orçamento OS #${order.orderNumber}`,
-                order.id
-              );
-            });
-          });
-
-          return {
-            ...order,
-            status: 'em_execucao',
-            quote: order.quote
-              ? {
-                  ...order.quote,
-                  status: 'aprovado',
-                  answeredAt: timestamp,
-                }
-              : undefined,
-            timeline: [
-              {
-                id: 'tl-' + Date.now(),
-                timestamp,
-                type: 'quote_approved',
-                title: 'Orçamento APROVADO pelo cliente',
-                description: 'Autorização recebida com sucesso. OS liberada para execução na bancada.',
-                user: currentRole === 'cliente' ? 'Cliente (Portal)' : 'Mariana (Balcão)',
-              },
-              {
-                id: 'tl-exec-' + Date.now(),
-                timestamp,
-                type: 'status_change',
-                title: 'Status: EM EXECUÇÃO',
-                description: 'Instrumento pronto para receber os serviços cadastrados.',
-                user: 'Sistema Luthieria',
-              },
-              ...order.timeline,
-            ],
-          };
-        })
-      );
-
-      showToast({
-        title: 'Orçamento Aprovado!',
-        description: 'Status avançado para Em Execução e peças reservadas.',
-        type: 'success',
-      });
-    },
-    [triggerHaptic, updateStockQuantity, currentRole, showToast]
-  );
-
-  const rejectQuote = useCallback(
-    (orderId: string, reason: string) => {
-      triggerHaptic();
-      setOrders((prev) =>
-        prev.map((order) => {
-          if (order.id !== orderId) return order;
-          const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 16);
-          return {
-            ...order,
-            quote: order.quote
-              ? {
-                  ...order.quote,
-                  status: 'rejeitado',
-                  answeredAt: timestamp,
-                  rejectionReason: reason,
-                }
-              : undefined,
-            timeline: [
-              {
-                id: 'tl-' + Date.now(),
-                timestamp,
-                type: 'quote_rejected',
-                title: 'Orçamento Recusado',
-                description: `Motivo: ${reason}`,
-                user: currentRole === 'cliente' ? 'Cliente' : 'Atendente',
-              },
-              ...order.timeline,
-            ],
-          };
-        })
-      );
-
-      showToast({
-        title: 'Recusa registrada',
-        description: 'Você pode reajustar o orçamento com o cliente.',
-        type: 'warning',
-      });
-    },
-    [triggerHaptic, currentRole, showToast]
-  );
-
-  const createOrder = useCallback(
-    (orderData: Partial<Order>, clientId: string, instrumentId: string) => {
-      triggerHaptic();
-      const nextNumber = Math.max(...orders.map((o) => o.orderNumber), 1040) + 1;
-      const client = clients.find((c) => c.id === clientId);
-      const tokenInitials = client ? client.name.split(' ').map((n) => n[0]).join('').slice(0, 2) : 'OS';
-      const clientTrackingToken = `${tokenInitials}-${nextNumber}-${Math.floor(10 + Math.random() * 90)}`;
-
-      const services = orderData.services || [];
-      const laborTotal = services.reduce((acc, s) => acc + s.laborPrice, 0);
-      const partsTotal = services.reduce(
-        (acc, s) => acc + s.partsUsed.reduce((pAcc, p) => pAcc + p.unitPrice * p.quantity, 0),
-        0
-      );
-      const totalAmount = laborTotal + partsTotal;
-
-      const newOrder: Order = {
-        id: 'ord-' + nextNumber,
-        orderNumber: nextNumber,
-        clientId,
-        instrumentId,
-        status: (orderData.status as OrderStatus) || 'recebido',
-        priority: orderData.priority || 'normal',
-        reportedIssue: orderData.reportedIssue || 'Revisão e regulagem geral',
-        diagnosisNotes: orderData.diagnosisNotes || '',
-        entryDate: new Date().toISOString().substring(0, 10),
-        estimatedDeliveryDate:
-          orderData.estimatedDeliveryDate ||
-          new Date(Date.now() + 5 * 24 * 3600 * 1000).toISOString().substring(0, 10),
-        services,
-        quote: {
-          id: 'qt-' + nextNumber,
-          orderId: 'ord-' + nextNumber,
-          laborTotal,
-          partsTotal,
-          discount: 0,
-          grandTotal: totalAmount,
-          status: 'pendente',
-          paymentTerms: '50% entrada + 50% na entrega',
-        },
-        photos: orderData.photos || [],
-        timeline: [
-          {
-            id: 'tl-' + Date.now(),
-            timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
-            type: 'status_change',
-            title: 'Ordem de Serviço Aberta',
-            description: `OS #${nextNumber} criada na recepção com previsão de 5 dias úteis.`,
-            user: currentRole === 'luthier' ? 'Armando (Luthier)' : 'Mariana (Balcão)',
-          },
-        ],
-        technicianNotes: orderData.technicianNotes || '',
-        totalAmount,
-        paidAmount: 0,
-        clientTrackingToken,
-      };
-
-      setOrders((prev) => [newOrder, ...prev]);
-
-      if (syncStatus === 'offline') {
-        setOfflineQueueCount((c) => c + 1);
-      }
-
-      showToast({
-        title: `OS #${nextNumber} aberta com sucesso!`,
-        description: 'Pronta para diagnóstico e envio de link ao cliente.',
-        type: 'success',
-      });
-
-      return newOrder;
-    },
-    [orders, clients, currentRole, syncStatus, triggerHaptic, showToast]
-  );
-
-  const createClient = useCallback(
-    (clientData: Omit<Client, 'id' | 'createdAt'>) => {
-      triggerHaptic();
-      const newClient: Client = {
-        ...clientData,
-        id: 'cli-' + Date.now(),
-        createdAt: new Date().toISOString().substring(0, 10),
-      };
-      setClients((prev) => [newClient, ...prev]);
-      showToast({
-        title: `Cliente ${newClient.name} cadastrado`,
-        type: 'success',
-      });
-      return newClient;
-    },
-    [triggerHaptic, showToast]
-  );
-
-  const createInstrument = useCallback(
-    (instrumentData: Omit<Instrument, 'id' | 'createdAt' | 'photos'>, photos: Photo[] = []) => {
-      triggerHaptic();
-      const newInst: Instrument = {
-        ...instrumentData,
-        id: 'inst-' + Date.now(),
-        photos,
-        createdAt: new Date().toISOString().substring(0, 10),
-      };
-      setInstruments((prev) => [newInst, ...prev]);
-      showToast({
-        title: `${newInst.brand} ${newInst.model} registrado`,
-        type: 'success',
-      });
-      return newInst;
-    },
-    [triggerHaptic, showToast]
-  );
-
-  const recordPayment = useCallback(
-    (paymentData: Omit<Payment, 'id' | 'receiptNumber'>) => {
-      triggerHaptic();
-      const receiptNumber = 'REC-2026-' + (payments.length + 100);
-      const newPayment: Payment = {
-        ...paymentData,
-        id: 'pay-' + Date.now(),
-        receiptNumber,
-      };
-
-      setPayments((prev) => [newPayment, ...prev]);
-
-      // update order's paidAmount
-      setOrders((prev) =>
-        prev.map((order) => {
-          if (order.id !== paymentData.orderId) return order;
-          const updatedPaid = (order.paidAmount || 0) + paymentData.amount;
-          return {
-            ...order,
-            paidAmount: updatedPaid,
-            timeline: [
-              {
-                id: 'tl-' + Date.now(),
-                timestamp: paymentData.date,
-                type: 'payment_received',
-                title: `Pagamento recebido: R$ ${paymentData.amount.toFixed(2)} (${paymentData.method.toUpperCase()})`,
-                description: `Recibo gerado: ${receiptNumber}`,
-                user: currentRole === 'luthier' ? 'Armando (Luthier)' : 'Mariana (Balcão)',
-              },
-              ...order.timeline,
-            ],
-          };
-        })
-      );
-
-      try {
-        confetti({
-          particleCount: 40,
-          spread: 50,
-          origin: { y: 0.7 },
-        });
-      } catch {
-        // ignore
-      }
-
-      showToast({
-        title: `Pagamento de R$ ${paymentData.amount.toFixed(2)} registrado!`,
-        description: `Recibo #${receiptNumber} pronto para envio.`,
-        type: 'success',
-      });
-
-      return newPayment;
-    },
-    [payments.length, currentRole, triggerHaptic, showToast]
-  );
-
-  const openCamera = useCallback((callback: (photoUrl: string, caption?: string) => void) => {
+  const openCamera = useCallback((callback: CameraCallback, defaultTag: Photo['tag'] = 'bancada') => {
     setCameraCallback(() => callback);
+    setCameraDefaultTag(defaultTag);
     setIsCameraModalOpen(true);
   }, []);
 
@@ -847,25 +697,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setBarcodeCallback(null);
   }, []);
 
-  const resetToDefaults = useCallback(() => {
-    localStorage.removeItem('luthier_clients');
-    localStorage.removeItem('luthier_instruments');
-    localStorage.removeItem('luthier_orders');
-    localStorage.removeItem('luthier_stock');
-    localStorage.removeItem('luthier_payments');
-    localStorage.removeItem('luthier_movements');
-    setClients(INITIAL_CLIENTS);
-    setInstruments(INITIAL_INSTRUMENTS);
-    setOrders(INITIAL_ORDERS);
-    setStock(INITIAL_STOCK);
-    setPayments(INITIAL_PAYMENTS);
-    setStockMovements(INITIAL_MOVEMENTS);
-    showToast({
-      title: 'Dados restaurados para o padrão de demonstração!',
-      type: 'info',
-    });
-  }, [showToast]);
-
   return (
     <AppContext.Provider
       value={{
@@ -873,11 +704,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         instruments,
         orders,
         stock,
-        payments,
         stockMovements,
+        catalog,
+        isDataLoading,
         currentRole,
         syncStatus,
-        offlineQueueCount,
         activeTab,
         searchQuery,
         recentSearches,
@@ -889,9 +720,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         toasts,
         isCameraModalOpen,
         cameraCallback,
+        cameraDefaultTag,
         isBarcodeModalOpen,
         barcodeCallback,
-        setRole,
         setActiveTab,
         setSearchQuery,
         addRecentSearch,
@@ -901,27 +732,37 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setIsNewOrderWizardOpen,
         setIsWorkbenchModeOpen,
         toggleDarkMode,
-        toggleSyncStatus,
+        refreshData,
         triggerHaptic,
         showToast,
         dismissToast,
+        handleError,
+        loadOrderDetail,
         advanceOrderStatus,
         updateOrder,
         createOrder,
         addServiceItem,
+        removeServiceItem,
         toggleServiceDone,
+        addPart,
+        removePart,
         addOrderPhoto,
+        removeOrderPhoto,
         approveQuote,
         rejectQuote,
+        addNote,
+        recordPayment,
         createClient,
         createInstrument,
         updateStockQuantity,
-        recordPayment,
+        createProduct,
+        loadStockMovements,
+        saveCatalogItem,
+        removeCatalogItem,
         openCamera,
         closeCamera,
         openBarcodeScanner,
         closeBarcodeScanner,
-        resetToDefaults,
       }}
     >
       {children}
@@ -936,3 +777,5 @@ export const useApp = () => {
   }
   return context;
 };
+
+export { STATUS_LABELS };
