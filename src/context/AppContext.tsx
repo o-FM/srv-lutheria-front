@@ -22,6 +22,19 @@ import {
   INITIAL_PAYMENTS,
   INITIAL_MOVEMENTS,
 } from '../data/seedData';
+import { USE_BACKEND } from '../services/apiClient';
+import {
+  backendApi,
+  OrderDto,
+  PARTS_ONLY_SERVICE_ID,
+  paymentsFromOrder,
+  toClient,
+  toInstrument,
+  toOrder,
+  toStockItem,
+  toStockMovement,
+} from '../services/backendApi';
+import { useAuth } from './AuthContext';
 
 interface AppContextType {
   // State
@@ -43,6 +56,10 @@ interface AppContextType {
   isWorkbenchModeOpen: boolean;
   isDarkMode: boolean;
   toasts: ToastMessage[];
+  /** true quando os dados vêm do backend srv-lutheria (VITE_API_URL). */
+  isBackendMode: boolean;
+  isLoadingData: boolean;
+  reloadData: () => Promise<void>;
 
   // Modals & Camera Callbacks
   isCameraModalOpen: boolean;
@@ -71,18 +88,21 @@ interface AppContextType {
   // Domain Actions
   advanceOrderStatus: (orderId: string, specificStatus?: OrderStatus, note?: string) => void;
   updateOrder: (orderId: string, updates: Partial<Order>) => void;
-  createOrder: (orderData: Partial<Order>, clientId: string, instrumentId: string) => Order;
+  createOrder: (orderData: Partial<Order>, clientId: string, instrumentId: string) => Promise<Order>;
   addServiceItem: (orderId: string, service: Omit<ServiceItem, 'id'>) => void;
   toggleServiceDone: (orderId: string, serviceId: string) => void;
   addOrderPhoto: (orderId: string, photo: Omit<Photo, 'id' | 'timestamp'>) => void;
   approveQuote: (orderId: string) => void;
   rejectQuote: (orderId: string, reason: string) => void;
 
-  createClient: (clientData: Omit<Client, 'id' | 'createdAt'>) => Client;
-  createInstrument: (instrumentData: Omit<Instrument, 'id' | 'createdAt' | 'photos'>, photos?: Photo[]) => Instrument;
+  createClient: (clientData: Omit<Client, 'id' | 'createdAt'>) => Promise<Client>;
+  createInstrument: (
+    instrumentData: Omit<Instrument, 'id' | 'createdAt' | 'photos'>,
+    photos?: Photo[]
+  ) => Promise<Instrument>;
 
   updateStockQuantity: (stockItemId: string, delta: number, reason: string, orderId?: string) => void;
-  recordPayment: (payment: Omit<Payment, 'id' | 'receiptNumber'>) => Payment;
+  recordPayment: (payment: Omit<Payment, 'id' | 'receiptNumber'>) => Promise<Payment>;
 
   openCamera: (callback: (photoUrl: string, caption?: string) => void) => void;
   closeCamera: () => void;
@@ -107,31 +127,37 @@ const STATUS_FLOW: OrderStatus[] = [
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // Load from localStorage or seed
   const [clients, setClients] = useState<Client[]>(() => {
+    if (USE_BACKEND) return [];
     const saved = localStorage.getItem('luthier_clients');
     return saved ? JSON.parse(saved) : INITIAL_CLIENTS;
   });
 
   const [instruments, setInstruments] = useState<Instrument[]>(() => {
+    if (USE_BACKEND) return [];
     const saved = localStorage.getItem('luthier_instruments');
     return saved ? JSON.parse(saved) : INITIAL_INSTRUMENTS;
   });
 
   const [orders, setOrders] = useState<Order[]>(() => {
+    if (USE_BACKEND) return [];
     const saved = localStorage.getItem('luthier_orders');
     return saved ? JSON.parse(saved) : INITIAL_ORDERS;
   });
 
   const [stock, setStock] = useState<StockItem[]>(() => {
+    if (USE_BACKEND) return [];
     const saved = localStorage.getItem('luthier_stock');
     return saved ? JSON.parse(saved) : INITIAL_STOCK;
   });
 
   const [payments, setPayments] = useState<Payment[]>(() => {
+    if (USE_BACKEND) return [];
     const saved = localStorage.getItem('luthier_payments');
     return saved ? JSON.parse(saved) : INITIAL_PAYMENTS;
   });
 
   const [stockMovements, setStockMovements] = useState<StockMovement[]>(() => {
+    if (USE_BACKEND) return [];
     const saved = localStorage.getItem('luthier_movements');
     return saved ? JSON.parse(saved) : INITIAL_MOVEMENTS;
   });
@@ -167,27 +193,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Sync to localStorage
   useEffect(() => {
-    localStorage.setItem('luthier_clients', JSON.stringify(clients));
+    if (!USE_BACKEND) localStorage.setItem('luthier_clients', JSON.stringify(clients));
   }, [clients]);
 
   useEffect(() => {
-    localStorage.setItem('luthier_instruments', JSON.stringify(instruments));
+    if (!USE_BACKEND) localStorage.setItem('luthier_instruments', JSON.stringify(instruments));
   }, [instruments]);
 
   useEffect(() => {
-    localStorage.setItem('luthier_orders', JSON.stringify(orders));
+    if (!USE_BACKEND) localStorage.setItem('luthier_orders', JSON.stringify(orders));
   }, [orders]);
 
   useEffect(() => {
-    localStorage.setItem('luthier_stock', JSON.stringify(stock));
+    if (!USE_BACKEND) localStorage.setItem('luthier_stock', JSON.stringify(stock));
   }, [stock]);
 
   useEffect(() => {
-    localStorage.setItem('luthier_payments', JSON.stringify(payments));
+    if (!USE_BACKEND) localStorage.setItem('luthier_payments', JSON.stringify(payments));
   }, [payments]);
 
   useEffect(() => {
-    localStorage.setItem('luthier_movements', JSON.stringify(stockMovements));
+    if (!USE_BACKEND) localStorage.setItem('luthier_movements', JSON.stringify(stockMovements));
   }, [stockMovements]);
 
   useEffect(() => {
@@ -223,6 +249,132 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const dismissToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
+
+  // ---------- Backend real (srv-lutheria) ----------
+  const { user: authUser } = useAuth();
+  const [isLoadingData, setIsLoadingData] = useState<boolean>(false);
+
+  const showApiError = useCallback(
+    (err: unknown, title = 'Falha na API') => {
+      showToast({
+        title,
+        description: err instanceof Error ? err.message : String(err),
+        type: 'error',
+        duration: 7000,
+      });
+    },
+    [showToast]
+  );
+
+  /** Pagamentos vêm embutidos na OS; precisamos de cliente/instrumento para exibir. */
+  const derivePayments = useCallback(
+    (dtos: OrderDto[], clientList: Client[], instrumentList: Instrument[]) =>
+      dtos
+        .flatMap((o) => {
+          const client = clientList.find((c) => c.id === o.clientId);
+          const inst = instrumentList.find((i) => i.id === o.instrumentId);
+          return paymentsFromOrder(o, client?.name || 'Cliente', inst ? `${inst.brand} ${inst.model}` : '');
+        })
+        .sort((a, b) => b.date.localeCompare(a.date)),
+    []
+  );
+
+  const reloadStock = useCallback(async () => {
+    const products = (await backendApi.listProducts()).map(toStockItem);
+    setStock(products);
+    const movements = await Promise.all(
+      products.map(async (p) =>
+        (await backendApi.listMovements(p.id)).content.map((m) => toStockMovement(m, p.name))
+      )
+    );
+    setStockMovements(movements.flat().sort((a, b) => b.date.localeCompare(a.date)));
+  }, []);
+
+  const reloadData = useCallback(async () => {
+    if (!USE_BACKEND) return;
+    setIsLoadingData(true);
+    try {
+      const customers = await backendApi.listCustomers();
+      const clientList = customers.map(toClient);
+      const instrumentList = (
+        await Promise.all(customers.map((c) => backendApi.listInstruments(c.id)))
+      )
+        .flat()
+        .map(toInstrument);
+      const orderDtos = await backendApi.listOrders();
+
+      setClients(clientList);
+      setInstruments(instrumentList);
+      setOrders((prev) =>
+        orderDtos.map((o) => toOrder(o, prev.find((p) => p.id === o.id)))
+      );
+      setPayments(derivePayments(orderDtos, clientList, instrumentList));
+      await reloadStock();
+    } catch (err) {
+      showApiError(err, 'Não foi possível carregar os dados da oficina');
+    } finally {
+      setIsLoadingData(false);
+    }
+  }, [derivePayments, reloadStock, showApiError]);
+
+  // Carrega ao entrar / trocar de conta; limpa ao sair
+  useEffect(() => {
+    if (!USE_BACKEND) return;
+    if (authUser) {
+      reloadData();
+    } else {
+      setClients([]);
+      setInstruments([]);
+      setOrders([]);
+      setStock([]);
+      setPayments([]);
+      setStockMovements([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authUser?.id]);
+
+  /** Token do portal: a listagem não traz, então busca o detalhe se preciso. */
+  const portalToken = useCallback(
+    async (order: Order) =>
+      order.clientTrackingToken || (await backendApi.getOrder(order.id)).clientTrackingToken,
+    []
+  );
+
+  /** Substitui a OS local pela resposta da API (mantém as fotos, que só existem no front). */
+  const applyOrderDto = useCallback(
+    (dto: OrderDto): Order => {
+      let mapped = toOrder(dto);
+      setOrders((prev) => {
+        const previous = prev.find((o) => o.id === dto.id);
+        mapped = toOrder(dto, previous);
+        return previous ? prev.map((o) => (o.id === dto.id ? mapped : o)) : [mapped, ...prev];
+      });
+      const client = clients.find((c) => c.id === dto.clientId);
+      const inst = instruments.find((i) => i.id === dto.instrumentId);
+      const orderPayments = paymentsFromOrder(
+        dto,
+        client?.name || 'Cliente',
+        inst ? `${inst.brand} ${inst.model}` : ''
+      );
+      setPayments((prev) =>
+        [...prev.filter((p) => p.orderId !== dto.id), ...orderPayments].sort((a, b) =>
+          b.date.localeCompare(a.date)
+        )
+      );
+      return mapped;
+    },
+    [clients, instruments]
+  );
+
+  // Ao abrir uma OS, busca o detalhe (traz o token do portal e o estado mais recente)
+  useEffect(() => {
+    if (!USE_BACKEND || !activeOrderId) return;
+    backendApi
+      .getOrder(activeOrderId)
+      .then(applyOrderDto)
+      .catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeOrderId]);
 
   const toggleDarkMode = useCallback(() => {
     setIsDarkMode((prev) => !prev);
@@ -290,6 +442,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // Update Stock with log
   const updateStockQuantity = useCallback(
     (stockItemId: string, delta: number, reason: string, orderId?: string) => {
+      if (USE_BACKEND) {
+        if (delta === 0) return;
+        const item = stock.find((s) => s.id === stockItemId);
+        backendApi
+          .createMovement(stockItemId, {
+            type: delta > 0 ? 'entrada' : 'saida',
+            quantity: Math.abs(delta),
+            reason,
+            orderId,
+          })
+          .then((m) => {
+            setStock((prev) =>
+              prev.map((s) => (s.id === stockItemId ? { ...s, currentQuantity: m.balanceAfter } : s))
+            );
+            setStockMovements((prev) => [toStockMovement(m, item?.name || ''), ...prev]);
+          })
+          .catch((err) => showApiError(err, 'Falha ao movimentar o estoque'));
+        return;
+      }
+
       setStock((prev) =>
         prev.map((item) => {
           if (item.id === stockItemId) {
@@ -315,13 +487,54 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setStockMovements((prev) => [movement, ...prev]);
       }
     },
-    [stock]
+    [stock, showApiError]
   );
 
   // Advance Order Status
   const advanceOrderStatus = useCallback(
     (orderId: string, specificStatus?: OrderStatus, note?: string) => {
       triggerHaptic();
+
+      if (USE_BACKEND) {
+        const order = orders.find((o) => o.id === orderId);
+        if (!order) return;
+        let next = specificStatus;
+        if (!next) {
+          const idx = STATUS_FLOW.indexOf(order.status);
+          if (idx < 0 || idx >= STATUS_FLOW.length - 1) return;
+          next = STATUS_FLOW[idx + 1];
+        }
+        const target = next;
+        // Na API, "aguardando_aprovacao" só via envio do orçamento e "em_execucao" só via aprovação
+        const call =
+          target === 'aguardando_aprovacao'
+            ? backendApi.sendQuote(orderId)
+            : target === 'em_execucao' && order.status === 'aguardando_aprovacao'
+            ? backendApi.approveQuote(orderId)
+            : backendApi.changeStatus(orderId, target, note);
+        call
+          .then((dto) => {
+            applyOrderDto(dto);
+            if (target === 'pronto' || target === 'entregue') {
+              try {
+                confetti({ particleCount: 50, spread: 60, origin: { y: 0.8 } });
+              } catch {
+                // ignore
+              }
+            }
+            // A baixa de estoque ao ficar "pronto" é assíncrona (evento no backend)
+            if (target === 'pronto') {
+              setTimeout(() => reloadStock().catch(() => undefined), 1500);
+            }
+            showToast({
+              title: `OS #${order.orderNumber} avançou para ${dto.status}`,
+              description: 'Alteração registrada na API.',
+              type: 'success',
+            });
+          })
+          .catch((err) => showApiError(err, `Não foi possível mover a OS #${order.orderNumber}`));
+        return;
+      }
 
       setOrders((prev) => {
         const order = prev.find((o) => o.id === orderId);
@@ -444,17 +657,49 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         );
       });
     },
-    [currentRole, triggerHaptic, showToast, updateStockQuantity, syncStatus]
+    [currentRole, triggerHaptic, showToast, updateStockQuantity, syncStatus, orders, applyOrderDto,
+      reloadStock, showApiError]
   );
 
-  const updateOrder = useCallback((orderId: string, updates: Partial<Order>) => {
-    setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, ...updates } : o))
-    );
-  }, []);
+  const updateOrder = useCallback(
+    (orderId: string, updates: Partial<Order>) => {
+      setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, ...updates } : o)));
+      if (USE_BACKEND) {
+        backendApi
+          .updateOrder(orderId, {
+            priority: updates.priority,
+            diagnosisNotes: updates.diagnosisNotes,
+            technicianNotes: updates.technicianNotes,
+            estimatedDeliveryDate: updates.estimatedDeliveryDate,
+            discount: updates.quote?.discount,
+            paymentTerms: updates.quote?.paymentTerms,
+          })
+          .then(applyOrderDto)
+          .catch((err) => showApiError(err, 'Não foi possível atualizar a OS'));
+      }
+    },
+    [applyOrderDto, showApiError]
+  );
 
   const addServiceItem = useCallback(
     (orderId: string, serviceData: Omit<ServiceItem, 'id'>) => {
+      if (USE_BACKEND) {
+        backendApi
+          .addService(orderId, {
+            title: serviceData.title,
+            description: serviceData.description,
+            laborPrice: serviceData.laborPrice,
+          })
+          .then(async (dto) => {
+            for (const part of serviceData.partsUsed) {
+              dto = await backendApi.addPart(orderId, part.stockItemId, part.quantity);
+            }
+            applyOrderDto(dto);
+          })
+          .catch((err) => showApiError(err, 'Não foi possível adicionar o serviço'));
+        return;
+      }
+
       const newService: ServiceItem = {
         ...serviceData,
         id: 'srv-' + Date.now(),
@@ -487,12 +732,31 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         })
       );
     },
-    []
+    [applyOrderDto, showApiError]
   );
 
   const toggleServiceDone = useCallback(
     (orderId: string, serviceId: string) => {
       triggerHaptic();
+      if (USE_BACKEND) {
+        const service = orders
+          .find((o) => o.id === orderId)
+          ?.services.find((s) => s.id === serviceId);
+        if (!service || service.id === PARTS_ONLY_SERVICE_ID) return;
+        if (service.done) {
+          showToast({
+            title: 'Serviço já concluído',
+            description: 'A API não permite reabrir um serviço concluído.',
+            type: 'info',
+          });
+          return;
+        }
+        backendApi
+          .markServiceDone(orderId, serviceId)
+          .then(applyOrderDto)
+          .catch((err) => showApiError(err, 'Não foi possível concluir o serviço'));
+        return;
+      }
       setOrders((prev) =>
         prev.map((order) => {
           if (order.id !== orderId) return order;
@@ -506,7 +770,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         })
       );
     },
-    [triggerHaptic]
+    [triggerHaptic, orders, applyOrderDto, showApiError, showToast]
   );
 
   const addOrderPhoto = useCallback(
@@ -550,6 +814,33 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const approveQuote = useCallback(
     (orderId: string) => {
       triggerHaptic();
+      if (USE_BACKEND) {
+        const order = orders.find((o) => o.id === orderId);
+        if (!order) return;
+        // Persona cliente aprova pelo portal público (token da OS), como o cliente real faria
+        const call =
+          currentRole === 'cliente'
+            ? portalToken(order)
+                .then((token) => backendApi.portalApprove(token))
+                .then(() => backendApi.getOrder(orderId))
+            : backendApi.approveQuote(orderId);
+        call
+          .then((dto) => {
+            applyOrderDto(dto);
+            try {
+              confetti({ particleCount: 70, spread: 70, origin: { y: 0.6 } });
+            } catch {
+              // ignore
+            }
+            showToast({
+              title: 'Orçamento Aprovado!',
+              description: 'Status avançado para Em Execução.',
+              type: 'success',
+            });
+          })
+          .catch((err) => showApiError(err, 'Não foi possível aprovar o orçamento'));
+        return;
+      }
       try {
         confetti({
           particleCount: 70,
@@ -616,12 +907,34 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         type: 'success',
       });
     },
-    [triggerHaptic, updateStockQuantity, currentRole, showToast]
+    [triggerHaptic, updateStockQuantity, currentRole, showToast, orders, applyOrderDto, showApiError,
+      portalToken]
   );
 
   const rejectQuote = useCallback(
     (orderId: string, reason: string) => {
       triggerHaptic();
+      if (USE_BACKEND) {
+        const order = orders.find((o) => o.id === orderId);
+        if (!order) return;
+        const call =
+          currentRole === 'cliente'
+            ? portalToken(order)
+                .then((token) => backendApi.portalReject(token, reason))
+                .then(() => backendApi.getOrder(orderId))
+            : backendApi.rejectQuote(orderId, reason);
+        call
+          .then((dto) => {
+            applyOrderDto(dto);
+            showToast({
+              title: 'Recusa registrada',
+              description: 'Você pode reajustar o orçamento com o cliente.',
+              type: 'warning',
+            });
+          })
+          .catch((err) => showApiError(err, 'Não foi possível recusar o orçamento'));
+        return;
+      }
       setOrders((prev) =>
         prev.map((order) => {
           if (order.id !== orderId) return order;
@@ -657,12 +970,39 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         type: 'warning',
       });
     },
-    [triggerHaptic, currentRole, showToast]
+    [triggerHaptic, currentRole, showToast, orders, applyOrderDto, showApiError, portalToken]
   );
 
   const createOrder = useCallback(
-    (orderData: Partial<Order>, clientId: string, instrumentId: string) => {
+    async (orderData: Partial<Order>, clientId: string, instrumentId: string): Promise<Order> => {
       triggerHaptic();
+      if (USE_BACKEND) {
+        try {
+          const dto = await backendApi.createOrder({
+            customerId: clientId,
+            instrumentId,
+            priority: orderData.priority,
+            reportedIssue: orderData.reportedIssue || 'Revisão e regulagem geral',
+            estimatedDeliveryDate: orderData.estimatedDeliveryDate,
+            services: (orderData.services || []).map((s) => ({
+              title: s.title,
+              description: s.description,
+              laborPrice: s.laborPrice,
+            })),
+          });
+          const created = { ...toOrder(dto), photos: orderData.photos || [] };
+          setOrders((prev) => [created, ...prev.filter((o) => o.id !== created.id)]);
+          showToast({
+            title: `OS #${created.orderNumber} aberta com sucesso!`,
+            description: `Link do portal: ${created.clientTrackingToken}`,
+            type: 'success',
+          });
+          return created;
+        } catch (err) {
+          showApiError(err, 'Não foi possível abrir a OS');
+          throw err;
+        }
+      }
       const nextNumber = Math.max(...orders.map((o) => o.orderNumber), 1040) + 1;
       const client = clients.find((c) => c.id === clientId);
       const tokenInitials = client ? client.name.split(' ').map((n) => n[0]).join('').slice(0, 2) : 'OS';
@@ -731,12 +1071,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       return newOrder;
     },
-    [orders, clients, currentRole, syncStatus, triggerHaptic, showToast]
+    [orders, clients, currentRole, syncStatus, triggerHaptic, showToast, showApiError]
   );
 
   const createClient = useCallback(
-    (clientData: Omit<Client, 'id' | 'createdAt'>) => {
+    async (clientData: Omit<Client, 'id' | 'createdAt'>): Promise<Client> => {
       triggerHaptic();
+      if (USE_BACKEND) {
+        try {
+          const created = toClient(await backendApi.createCustomer(clientData));
+          setClients((prev) => [created, ...prev]);
+          showToast({ title: `Cliente ${created.name} cadastrado`, type: 'success' });
+          return created;
+        } catch (err) {
+          showApiError(err, 'Não foi possível cadastrar o cliente');
+          throw err;
+        }
+      }
       const newClient: Client = {
         ...clientData,
         id: 'cli-' + Date.now(),
@@ -749,12 +1100,29 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       });
       return newClient;
     },
-    [triggerHaptic, showToast]
+    [triggerHaptic, showToast, showApiError]
   );
 
   const createInstrument = useCallback(
-    (instrumentData: Omit<Instrument, 'id' | 'createdAt' | 'photos'>, photos: Photo[] = []) => {
+    async (
+      instrumentData: Omit<Instrument, 'id' | 'createdAt' | 'photos'>,
+      photos: Photo[] = []
+    ): Promise<Instrument> => {
       triggerHaptic();
+      if (USE_BACKEND) {
+        try {
+          const created = {
+            ...toInstrument(await backendApi.createInstrument(instrumentData)),
+            photos,
+          };
+          setInstruments((prev) => [created, ...prev]);
+          showToast({ title: `${created.brand} ${created.model} registrado`, type: 'success' });
+          return created;
+        } catch (err) {
+          showApiError(err, 'Não foi possível cadastrar o instrumento');
+          throw err;
+        }
+      }
       const newInst: Instrument = {
         ...instrumentData,
         id: 'inst-' + Date.now(),
@@ -768,12 +1136,41 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       });
       return newInst;
     },
-    [triggerHaptic, showToast]
+    [triggerHaptic, showToast, showApiError]
   );
 
   const recordPayment = useCallback(
-    (paymentData: Omit<Payment, 'id' | 'receiptNumber'>) => {
+    async (paymentData: Omit<Payment, 'id' | 'receiptNumber'>): Promise<Payment> => {
       triggerHaptic();
+      if (USE_BACKEND) {
+        try {
+          const dto = await backendApi.receivePayment(
+            paymentData.orderId,
+            paymentData.amount,
+            paymentData.method
+          );
+          applyOrderDto(dto);
+          const [created] = paymentsFromOrder(
+            dto,
+            paymentData.clientName,
+            paymentData.instrumentDescription
+          ).sort((a, b) => b.date.localeCompare(a.date));
+          try {
+            confetti({ particleCount: 40, spread: 50, origin: { y: 0.7 } });
+          } catch {
+            // ignore
+          }
+          showToast({
+            title: `Pagamento de R$ ${paymentData.amount.toFixed(2)} registrado!`,
+            description: `Recibo #${created?.receiptNumber} pronto para envio.`,
+            type: 'success',
+          });
+          return created;
+        } catch (err) {
+          showApiError(err, 'Não foi possível registrar o pagamento');
+          throw err;
+        }
+      }
       const receiptNumber = 'REC-2026-' + (payments.length + 100);
       const newPayment: Payment = {
         ...paymentData,
@@ -824,7 +1221,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       return newPayment;
     },
-    [payments.length, currentRole, triggerHaptic, showToast]
+    [payments.length, currentRole, triggerHaptic, showToast, applyOrderDto, showApiError]
   );
 
   const openCamera = useCallback((callback: (photoUrl: string, caption?: string) => void) => {
@@ -848,6 +1245,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, []);
 
   const resetToDefaults = useCallback(() => {
+    if (USE_BACKEND) {
+      reloadData().then(() => showToast({ title: 'Dados recarregados da API', type: 'info' }));
+      return;
+    }
     localStorage.removeItem('luthier_clients');
     localStorage.removeItem('luthier_instruments');
     localStorage.removeItem('luthier_orders');
@@ -864,7 +1265,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       title: 'Dados restaurados para o padrão de demonstração!',
       type: 'info',
     });
-  }, [showToast]);
+  }, [showToast, reloadData]);
 
   return (
     <AppContext.Provider
@@ -887,6 +1288,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         isWorkbenchModeOpen,
         isDarkMode,
         toasts,
+        isBackendMode: USE_BACKEND,
+        isLoadingData,
+        reloadData,
         isCameraModalOpen,
         cameraCallback,
         isBarcodeModalOpen,

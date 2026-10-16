@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { authApi } from '../../services/authApi';
+import { USE_BACKEND } from '../../services/apiClient';
 import { formatCpf, isValidCpf, isValidEmail, cleanCpf } from '../../utils/cpfValidator';
 import {
   Lock,
@@ -103,18 +104,23 @@ export const ReauthBottomSheet: React.FC = () => {
     try {
       if (!token) throw new Error('Sessão expirada. Faça login novamente.');
 
+      // Backend real: "cliente" é só pré-visualização do portal com a sessão atual
+      const portalPreview = USE_BACKEND && reauthModal.targetRole === 'cliente';
+
       // Call backend reauthentication endpoint
       const res = await authApi.reauthenticate(
         token,
         identifier,
         password,
-        reauthModal.actionType,
+        portalPreview ? 'SENSITIVE_UPDATE' : reauthModal.actionType,
         reauthModal.targetRole
       );
 
       triggerHaptic();
 
-      if (reauthModal.actionType === 'SWITCH_PROFILE') {
+      if (portalPreview) {
+        setRole('cliente');
+      } else if (reauthModal.actionType === 'SWITCH_PROFILE') {
         // Switch profile on server, invalidate old session, clear memory/cache
         const newUser = await switchProfileWithTicket(res.ticket);
         setRole(newUser.role);
@@ -245,7 +251,7 @@ export const ReauthBottomSheet: React.FC = () => {
             <div className="p-2.5 rounded-xl bg-stone-950/60 border border-stone-800/80 text-[11px] text-stone-400">
               <span className="font-semibold text-stone-300">Senhas de teste: </span>
               Luthier: <code className="text-amber-400 font-mono">Luthier@2026</code> ·
-              Balcão: <code className="text-amber-400 font-mono">Balcao@2026</code> ·
+              Balcão: <code className="text-amber-400 font-mono">Balcao@2026!</code> ·
               Cliente: <code className="text-amber-400 font-mono">Cliente@2026</code>
             </div>
 

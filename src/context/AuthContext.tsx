@@ -101,6 +101,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
   }, [token]);
 
+  // Backend real: refresh token expirado/revogado → volta para o login
+  useEffect(() => {
+    const onUnauthorized = () => {
+      localStorage.removeItem('luthier_auth_user');
+      sessionStorage.removeItem('luthier_auth_user');
+      setToken(null);
+      setUser(null);
+    };
+    window.addEventListener('luthier:unauthorized', onUnauthorized);
+    return () => window.removeEventListener('luthier:unauthorized', onUnauthorized);
+  }, []);
+
   // Inactivity tracking
   useEffect(() => {
     if (!token) return;

@@ -1,6 +1,10 @@
 /**
- * Auth API Client communicating with Express backend endpoints
+ * Auth API Client.
+ * - Com VITE_API_URL: fala direto com o backend srv-lutheria (/auth/**, /users/me, /audit-logs).
+ * - Sem VITE_API_URL: usa o mock Express (server.ts, rotas /api/auth/**).
  */
+import { api, tokenStore, TokenResponse, USE_BACKEND } from './apiClient';
+import { UserDto } from './backendApi';
 
 export interface AuthUser {
   id: string;
@@ -37,7 +41,7 @@ export interface AuditLogItem {
   details?: string;
 }
 
-export const authApi = {
+const mockAuthApi = {
   async login(identifier: string, password: string, rememberMe: boolean): Promise<LoginResponse> {
     const res = await fetch('/api/auth/login', {
       method: 'POST',
@@ -190,3 +194,135 @@ export const authApi = {
   },
 };
 
+
+// ---------- Backend real (srv-lutheria) ----------
+
+const toAuthUser = (u: UserDto): AuthUser => ({
+  id: u.id,
+  name: u.name,
+  email: u.email,
+  maskedCpf: u.maskedCpf || '',
+  phone: u.phone || '',
+  // O front tem 2 personas de equipe: bancada (luthier) e balcão (atendente)
+  role: u.profile === 'ATENDENTE' ? 'atendente' : 'luthier',
+  isAdmin: u.profile === 'ADMIN',
+});
+
+const requireEmail = (identifier: string) => {
+  const email = identifier.trim();
+  if (!email.includes('@')) {
+    throw new Error('A API aceita login apenas por e-mail. Informe seu e-mail.');
+  }
+  return email;
+};
+
+const backendLogin = (identifier: string, password: string) =>
+  api<TokenResponse>('/auth/login', {
+    method: 'POST',
+    body: { email: requireEmail(identifier), password },
+    auth: false,
+  });
+
+const backendAuthApi: typeof mockAuthApi = {
+  async login(identifier, password, rememberMe) {
+    const tokens = await backendLogin(identifier, password);
+    tokenStore.save(tokens, rememberMe);
+    const user = toAuthUser(await api<UserDto>('/users/me'));
+    return { token: tokens.accessToken, user, expiresAt: Date.now() + tokens.expiresIn * 1000 };
+  },
+
+  /**
+   * A API não tem reautenticação dedicada: validamos as credenciais com um novo login.
+   * Troca de perfil = entrar com a conta destino; o "ticket" carrega os tokens dela.
+   */
+  async reauthenticate(_token, identifier, password, actionType) {
+    const tokens = await backendLogin(identifier, password);
+    const targetUser = toAuthUser(await api<UserDto>('/users/me', { token: tokens.accessToken }));
+    if (actionType !== 'SWITCH_PROFILE') {
+      // Só validação: encerra a sessão extra que o login abriu
+      await api<void>('/auth/logout', {
+        method: 'POST',
+        body: { refreshToken: tokens.refreshToken },
+        auth: false,
+      }).catch(() => undefined);
+    }
+    return {
+      success: true,
+      ticket: actionType === 'SWITCH_PROFILE' ? JSON.stringify(tokens) : 'validated',
+      targetUser,
+      expiresInSeconds: tokens.expiresIn,
+    };
+  },
+
+  async switchProfile(_token, ticket) {
+    const tokens: TokenResponse = JSON.parse(ticket);
+    const oldRefresh = tokenStore.refresh();
+    if (oldRefresh) {
+      await api<void>('/auth/logout', {
+        method: 'POST',
+        body: { refreshToken: oldRefresh },
+        auth: false,
+      }).catch(() => undefined);
+    }
+    tokenStore.save(tokens);
+    const user = toAuthUser(await api<UserDto>('/users/me'));
+    return { token: tokens.accessToken, user, expiresAt: Date.now() + tokens.expiresIn * 1000 };
+  },
+
+  async updateSensitiveData() {
+    throw new Error(
+      'A API ainda não permite alterar e-mail, telefone ou senha pelo app. Use "Esqueci minha senha".'
+    );
+  },
+
+  async getMe() {
+    return toAuthUser(await api<UserDto>('/users/me'));
+  },
+
+  async logout() {
+    const refreshToken = tokenStore.refresh();
+    tokenStore.clear();
+    if (!refreshToken) return;
+    await api<void>('/auth/logout', { method: 'POST', body: { refreshToken }, auth: false }).catch(
+      () => undefined
+    );
+  },
+
+  async forgotPassword(identifier) {
+    await api<void>('/auth/forgot-password', {
+      method: 'POST',
+      body: { email: requireEmail(identifier) },
+      auth: false,
+    });
+    return { message: 'Se o e-mail estiver cadastrado, você receberá o link de redefinição.' };
+  },
+
+  async getAuditLogs() {
+    const page = await api<{
+      content: { id: string; timestamp: string; actor?: string; action: string; resourceType?: string;
+        resourceId?: string; details?: string; ip?: string }[];
+    }>('/audit-logs', { query: { page: 0, size: 50 } });
+    return page.content.map((l) => ({
+      id: l.id,
+      timestamp: l.timestamp,
+      action: l.action,
+      userId: l.actor,
+      maskedIdentifier: l.actor || '-',
+      result: 'SUCCESS' as const,
+      ip: l.ip || '-',
+      details: [l.resourceType, l.resourceId, l.details].filter(Boolean).join(' · ') || undefined,
+    }));
+  },
+
+  async getPermissions() {
+    // Permissões vêm do papel no JWT; o front usa utils/permissions.ts
+    return {};
+  },
+
+  async validateAction() {
+    // Autorização real é feita pelo backend em cada endpoint (403)
+    return true;
+  },
+};
+
+export const authApi = USE_BACKEND ? backendAuthApi : mockAuthApi;

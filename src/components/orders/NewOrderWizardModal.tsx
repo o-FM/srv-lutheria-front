@@ -181,7 +181,7 @@ export const NewOrderWizardModal: React.FC = () => {
     });
   };
 
-  const handleNextStep = () => {
+  const handleNextStep = async () => {
     triggerHaptic();
     if (step === 1) {
       // Validate or create client
@@ -190,11 +190,19 @@ export const NewOrderWizardModal: React.FC = () => {
           showToast({ title: 'Informe o nome do cliente', type: 'warning' });
           return;
         }
-        const created = createClient({
-          name: newClientName.trim(),
-          phone: newClientPhone.trim() || '(11) 99999-0000',
-          email: `${newClientName.toLowerCase().replace(/\s+/g, '')}@email.com`,
-        });
+        let created;
+        try {
+          created = await createClient({
+            name: newClientName.trim(),
+            phone: newClientPhone.trim() || '(11) 99999-0000',
+            email: `${newClientName
+              .normalize('NFD')
+              .replace(/[^a-zA-Z0-9]/g, '')
+              .toLowerCase()}@email.com`,
+          });
+        } catch {
+          return; // erro já exibido em toast
+        }
         setSelectedClientId(created.id);
         setIsAddingNewClient(false);
       } else if (!selectedClientId) {
@@ -209,18 +217,23 @@ export const NewOrderWizardModal: React.FC = () => {
           showToast({ title: 'Informe marca e modelo do instrumento', type: 'warning' });
           return;
         }
-        const createdInst = createInstrument(
-          {
-            clientId: selectedClientId,
-            type: instType,
-            brand: instBrand.trim(),
-            model: instModel.trim(),
-            stringsGauge: '0.10',
-            tuningPreference: 'Padrão E',
-            conditionNotes: reportedIssue,
-          },
-          photos
-        );
+        let createdInst;
+        try {
+          createdInst = await createInstrument(
+            {
+              clientId: selectedClientId,
+              type: instType,
+              brand: instBrand.trim(),
+              model: instModel.trim(),
+              stringsGauge: '0.10',
+              tuningPreference: 'Padrão E',
+              conditionNotes: reportedIssue,
+            },
+            photos
+          );
+        } catch {
+          return;
+        }
         setSelectedInstrumentId(createdInst.id);
         setIsAddingNewInstrument(false);
       }
@@ -233,7 +246,7 @@ export const NewOrderWizardModal: React.FC = () => {
     }
   };
 
-  const handleFinishOrder = () => {
+  const handleFinishOrder = async () => {
     triggerHaptic();
     const finalServices: ServiceItem[] = selectedServices
       .filter((s) => s.selected)
@@ -262,18 +275,23 @@ export const NewOrderWizardModal: React.FC = () => {
       .toISOString()
       .substring(0, 10);
 
-    const created = createOrder(
-      {
-        priority,
-        reportedIssue: reportedIssue.trim(),
-        diagnosisNotes: 'Aguardando posicionamento na bancada.',
-        estimatedDeliveryDate: estimatedDate,
-        services: finalServices,
-        photos,
-      },
-      selectedClientId,
-      selectedInstrumentId
-    );
+    let created;
+    try {
+      created = await createOrder(
+        {
+          priority,
+          reportedIssue: reportedIssue.trim(),
+          diagnosisNotes: 'Aguardando posicionamento na bancada.',
+          estimatedDeliveryDate: estimatedDate,
+          services: finalServices,
+          photos,
+        },
+        selectedClientId,
+        selectedInstrumentId
+      );
+    } catch {
+      return;
+    }
 
     // Clear draft
     localStorage.removeItem('luthier_os_wizard_draft');

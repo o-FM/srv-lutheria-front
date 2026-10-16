@@ -74,7 +74,7 @@ const users: UserRecord[] = [
       phone: '(11) 99123-8877',
       role: 'atendente',
       salt,
-      passwordHash: hashPassword('Balcao@2026', salt),
+      passwordHash: hashPassword('Balcao@2026!', salt),
     };
   })(),
   (() => {

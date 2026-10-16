@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { LoginPage } from './LoginPage';
 import { ForgotPasswordModal } from './ForgotPasswordModal';
+import { USE_BACKEND } from '../../services/apiClient';
 
 export const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -10,7 +11,9 @@ export const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children })
 
   // Keep AppContext role in sync with authenticated user role
   useEffect(() => {
-    if (user && user.role !== currentRole) {
+    // Com o backend real não existe conta de cliente: a equipe pode pré-visualizar o portal
+    const previewingPortal = USE_BACKEND && currentRole === 'cliente';
+    if (user && user.role !== currentRole && !previewingPortal) {
       setRole(user.role);
     }
   }, [user, currentRole, setRole]);

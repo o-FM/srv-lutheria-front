@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
+    "dev:api": "vite --port 3000 --strictPort --mode api",
+    "seed:api": "tsx scripts/seed-api.ts",
     "start": "tsx server.ts",
     "build": "vite build",
     "preview": "vite preview",

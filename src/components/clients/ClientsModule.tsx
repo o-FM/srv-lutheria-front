@@ -84,21 +84,28 @@ export const ClientsModule: React.FC = () => {
     setCpf(formatted);
   };
 
-  const handleCreateClient = (e: React.FormEvent) => {
+  const handleCreateClient = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
       showToast({ title: 'Informe o nome do cliente', type: 'warning' });
       return;
     }
     triggerHaptic();
-    const created = createClient({
-      name: name.trim(),
-      phone: phone.trim() || '(11) 99999-9999',
-      email: email.trim() || `${name.toLowerCase().replace(/\s+/g, '')}@gmail.com`,
-      cpf: cpf.trim(),
-      address: address.trim(),
-      notes: notes.trim(),
-    });
+    let created;
+    try {
+      created = await createClient({
+        name: name.trim(),
+        phone: phone.trim() || '(11) 99999-9999',
+        email:
+          email.trim() ||
+          `${name.normalize('NFD').replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}@gmail.com`,
+        cpf: cpf.trim(),
+        address: address.trim(),
+        notes: notes.trim(),
+      });
+    } catch {
+      return; // erro já exibido em toast
+    }
     setName('');
     setPhone('');
     setEmail('');
@@ -109,23 +116,27 @@ export const ClientsModule: React.FC = () => {
     setSelectedClientId(created.id);
   };
 
-  const handleCreateInstrument = (e: React.FormEvent) => {
+  const handleCreateInstrument = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedClientId || !instBrand.trim() || !instModel.trim()) {
       showToast({ title: 'Informe a marca e modelo', type: 'warning' });
       return;
     }
     triggerHaptic();
-    createInstrument({
-      clientId: selectedClientId,
-      type: instType,
-      brand: instBrand.trim(),
-      model: instModel.trim(),
-      serialNumber: instSerial.trim(),
-      stringsGauge: instGauge.trim(),
-      tuningPreference: 'Padrão E (440Hz)',
-      conditionNotes: instNotes.trim(),
-    });
+    try {
+      await createInstrument({
+        clientId: selectedClientId,
+        type: instType,
+        brand: instBrand.trim(),
+        model: instModel.trim(),
+        serialNumber: instSerial.trim(),
+        stringsGauge: instGauge.trim(),
+        tuningPreference: 'Padrão E (440Hz)',
+        conditionNotes: instNotes.trim(),
+      });
+    } catch {
+      return;
+    }
     setInstBrand('');
     setInstModel('');
     setInstSerial('');
