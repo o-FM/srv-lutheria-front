@@ -29,7 +29,7 @@ export const BottomTabBar: React.FC = () => {
           setActiveTab(item.id);
         }}
         aria-current={active ? 'page' : undefined}
-        className={`flex-1 flex flex-col items-center justify-center gap-0.5 h-full min-w-12 transition-colors ${
+        className={`flex-1 flex flex-col items-center justify-center gap-0.5 h-full min-w-0 transition-colors ${
           active ? 'text-accent-400' : 'text-base-500 hover:text-base-300'
         }`}
       >
@@ -54,10 +54,16 @@ export const BottomTabBar: React.FC = () => {
       aria-label="Navegação principal"
       className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-base-950/95 backdrop-blur-sm border-t border-base-800 pb-[env(safe-area-inset-bottom)]"
     >
-      <div className="max-w-xl mx-auto flex items-center h-16 px-2">
-        {items.slice(0, middle).map(tab)}
+      {/* 3 colunas: [abas da esquerda | + | abas da direita]. As laterais têm a mesma largura,
+          então o "+" fica sempre no centro exato, mesmo com número ímpar de abas. */}
+      <div
+        className={`max-w-md mx-auto h-16 px-2 ${
+          canOpenOrder ? 'grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center' : 'flex items-center'
+        }`}
+      >
+        <div className="flex flex-1 h-full">{items.slice(0, middle).map(tab)}</div>
         {canOpenOrder && (
-          <div className="flex-1 flex justify-center">
+          <div className="flex justify-center px-2">
             <button
               type="button"
               onClick={() => {
@@ -71,7 +77,7 @@ export const BottomTabBar: React.FC = () => {
             </button>
           </div>
         )}
-        {items.slice(middle).map(tab)}
+        <div className="flex flex-1 h-full">{items.slice(middle).map(tab)}</div>
       </div>
     </nav>
   );
