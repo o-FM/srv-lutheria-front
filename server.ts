@@ -587,9 +587,12 @@ async function startServer() {
   // ---------------- VITE MIDDLEWARE SETUP ----------------
   const isProd = process.env.NODE_ENV === 'production';
   if (!isProd) {
+    // `npm run dev` usa o modo development (.env.development → API em localhost:8080);
+    // `npm run dev:demo` (--demo) não carrega esse arquivo e fica no mock deste servidor.
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
+      mode: process.argv.includes('--demo') ? 'demo' : 'development',
     });
     app.use(vite.middlewares);
   } else {

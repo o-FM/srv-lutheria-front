@@ -9,16 +9,19 @@ configuráveis. Backend: [srv-lutheria](https://github.com/o-FM/srv-lutheria).
 ```bash
 npm install
 
-# Modo demonstração (sem backend): dados de exemplo + login simulado pelo server.ts
-npm run dev                     # http://localhost:3000
-
-# Com a API real (srv-lutheria rodando em :8080)
+# Chamando a API local (srv-lutheria em http://localhost:8080) — padrão
 npm run seed:api                # opcional: dados de demonstração via API (ver abaixo)
-npm run dev:api                 # http://localhost:3000 → http://localhost:8080 (lê .env.api)
-# ou: echo "VITE_API_URL=http://localhost:8080" > .env.local && npm run dev:vite  (:5173)
+npm run dev                     # http://localhost:3000 → http://localhost:8080 (.env.development)
+npm run dev:vite                # o mesmo, só Vite, em http://localhost:5173
+
+# Modo demonstração (sem backend): dados de exemplo + login simulado pelo server.ts
+npm run dev:demo                # http://localhost:3000
 
 npm run build                   # checagem de tipos + build de produção em dist/
 ```
+
+A tela de login mostra em qual modo o front está ("API: http://localhost:8080" ou "Modo
+demonstração"). Para outra URL da API só na sua máquina, crie `.env.development.local`.
 
 O modo é decidido por `VITE_API_URL` (`src/config/env.ts`): vazio → demonstração; preenchido →
 API. Em produção o `dist/` é estático e pode ser servido por qualquer CDN/servidor web, com
@@ -35,7 +38,7 @@ java -jar srv-luthier-app/target/srv-luthier-app-1.0.0-SNAPSHOT.jar
 cd srv-lutheria-front && npm install && npm run seed:api
 
 # 3. Front apontando para http://localhost:8080 (sem o mock do server.ts)
-npm run dev:api
+npm run dev
 ```
 
 O seed (`scripts/seed-api.ts`) usa só a API pública: cadastra a oficina e a atendente e depois

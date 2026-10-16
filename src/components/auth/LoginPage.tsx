@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { isApiMode } from '../../config/env';
+import { env, isApiMode } from '../../config/env';
 import { BrandMark } from '../common/BrandMark';
 import { useApp } from '../../context/AppContext';
 import { formatCpf, isValidCpf, isValidEmail, cleanCpf } from '../../utils/cpfValidator';
@@ -340,6 +340,13 @@ export const LoginPage: React.FC = () => {
             </a>
           </p>
         )}
+        <p className="text-center text-[11px] text-base-500">
+          {isApiMode ? (
+            <>API: <span className="font-mono">{env.apiUrl}</span></>
+          ) : (
+            'Modo demonstração (sem backend) — use npm run dev para chamar a API'
+          )}
+        </p>
 
         {/* Demo Accounts Quick-Select Card (só no modo demonstração) */}
         {!isApiMode && (
