@@ -119,6 +119,9 @@ export const orderEndpoints = {
     http.patch<OrderDto>(`/service-orders/${id(orderId)}`, body),
   addService: (orderId: string, body: AddServiceRequest) =>
     http.post<OrderDto>(`/service-orders/${id(orderId)}/services`, body),
+  /** Valor do serviço no diagnóstico (ADMIN/LUTHIER, até o envio do orçamento). */
+  updateService: (orderId: string, itemId: string, body: { laborPrice: number; title?: string; description?: string }) =>
+    http.put<OrderDto>(`/service-orders/${id(orderId)}/services/${id(itemId)}`, body),
   removeService: (orderId: string, itemId: string) =>
     http.delete<OrderDto>(`/service-orders/${id(orderId)}/services/${id(itemId)}`),
   markServiceDone: (orderId: string, itemId: string) =>

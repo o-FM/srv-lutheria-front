@@ -50,7 +50,11 @@ export const UserMenu: React.FC<{ onOpenAppearance: () => void; compact?: boolea
   }, [open]);
 
   const name = user?.name ?? 'Usuário';
-  const roleLabel = user?.isAdmin ? 'Administrador' : getRolePermissions(currentRole).roleLabel;
+  const roleLabel = user?.isAdmin
+    ? 'Administrador'
+    : user?.profile === 'LUTHIER'
+      ? 'Luthier'
+      : getRolePermissions(currentRole).roleLabel;
   const item =
     'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left text-sm text-base-200 hover:bg-base-800 transition-colors';
 

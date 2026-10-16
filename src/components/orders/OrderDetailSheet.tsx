@@ -24,6 +24,83 @@ import {
 } from 'lucide-react';
 import { OrderStatus, ServiceItem } from '../../types';
 
+/** Valores só mudam até o orçamento ser enviado (mesma regra do backend). */
+const PRICE_EDITABLE: OrderStatus[] = ['recebido', 'diagnostico', 'orcamento'];
+
+/** Mão de obra do serviço; luthier/dono edita durante o diagnóstico. */
+const ServicePrice: React.FC<{
+  value: number;
+  editable: boolean;
+  onSave: (value: number) => void;
+}> = ({ value, editable, onSave }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const pending = value === 0;
+
+  if (isEditing) {
+    const save = () => {
+      const parsed = Number(draft.replace(',', '.'));
+      if (Number.isFinite(parsed) && parsed >= 0) {
+        if (parsed !== value) onSave(parsed);
+        setIsEditing(false);
+      }
+    };
+    return (
+      <div className="mt-1.5 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-1 bg-base-900 border border-accent-600 rounded-lg px-2 py-1 text-xs">
+          <span className="text-base-400">R$</span>
+          <input
+            autoFocus
+            type="number"
+            inputMode="decimal"
+            min={0}
+            step="0.01"
+            aria-label="Valor da mão de obra"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') save();
+              if (e.key === 'Escape') setIsEditing(false);
+            }}
+            className="w-24 bg-transparent text-base-50 focus:outline-none"
+          />
+        </div>
+        <button type="button" onClick={save} className="px-2.5 py-1 rounded-lg bg-accent-600 text-on-accent text-[11px] font-semibold">
+          Salvar
+        </button>
+        <button type="button" onClick={() => setIsEditing(false)} className="px-2 py-1 text-[11px] text-base-400">
+          Cancelar
+        </button>
+      </div>
+    );
+  }
+
+  const label = pending ? 'Valor a definir no diagnóstico' : `Mão de obra: R$ ${value.toFixed(2)}`;
+  if (!editable) {
+    return (
+      <span className={`text-[11px] font-semibold mt-1 block ${pending ? 'text-amber-400' : 'text-accent-500'}`}>
+        {label}
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        setDraft(pending ? '' : String(value));
+        setIsEditing(true);
+      }}
+      className={`text-[11px] font-semibold mt-1 inline-flex items-center gap-1 underline decoration-dotted underline-offset-2 ${
+        pending ? 'text-amber-400' : 'text-accent-500'
+      }`}
+    >
+      {pending ? 'Informar valor' : label}
+      <span aria-hidden>✎</span>
+    </button>
+  );
+};
+
 const STATUS_STEPS: { status: OrderStatus; label: string }[] = [
   { status: 'recebido', label: 'Recebido' },
   { status: 'diagnostico', label: 'Diagnóstico' },
@@ -46,6 +123,7 @@ export const OrderDetailSheet: React.FC = () => {
     advanceOrderStatus,
     toggleServiceDone,
     addServiceItem,
+    updateServicePrice,
     openCamera,
     addOrderPhoto,
     approveQuote,
@@ -192,7 +270,7 @@ export const OrderDetailSheet: React.FC = () => {
                 </span>
               ) : (
                 <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-accent-950 text-accent-300 border border-accent-800">
-                  Bancada & Dono (Admin)
+                  Bancada
                 </span>
               )}
             </div>
@@ -397,9 +475,11 @@ export const OrderDetailSheet: React.FC = () => {
                             ))}
                           </div>
                         )}
-                        <span className="text-[11px] font-semibold text-accent-500 mt-1 block">
-                          Mão de obra: R$ {service.laborPrice.toFixed(2)}
-                        </span>
+                        <ServicePrice
+                          value={service.laborPrice}
+                          editable={currentRole === 'luthier' && PRICE_EDITABLE.includes(order.status) && !service.done}
+                          onSave={(v) => updateServicePrice(order.id, service.id, v)}
+                        />
                       </div>
 
                       <div

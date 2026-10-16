@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import {
   X,
@@ -45,9 +45,18 @@ const COMMON_SERVICES = [
   },
 ];
 
+/**
+ * O conteúdo só existe enquanto o modal está aberto: cada "Nova OS" começa do zero, sem
+ * herdar cliente, instrumento, defeito ou serviços da OS anterior.
+ */
 export const NewOrderWizardModal: React.FC = () => {
+  const { isNewOrderWizardOpen } = useApp();
+  return isNewOrderWizardOpen ? <NewOrderWizard /> : null;
+};
+
+const NewOrderWizard: React.FC = () => {
   const {
-    isNewOrderWizardOpen,
+    currentRole,
     setIsNewOrderWizardOpen,
     clients,
     createClient,
@@ -72,48 +81,26 @@ export const NewOrderWizardModal: React.FC = () => {
   const [selectedInstrumentId, setSelectedInstrumentId] = useState<string>('');
   const [isAddingNewInstrument, setIsAddingNewInstrument] = useState(false);
   const [instType, setInstType] = useState<InstrumentType>('guitarra');
-  const [instBrand, setInstBrand] = useState('Fender');
-  const [instModel, setInstModel] = useState('Stratocaster');
+  const [instBrand, setInstBrand] = useState('');
+  const [instModel, setInstModel] = useState('');
   const [photos, setPhotos] = useState<Photo[]>([]);
 
   // Issue & Voice
   const [reportedIssue, setReportedIssue] = useState('');
   const [isListening, setIsListening] = useState(false);
 
-  // Services & Timeline
+  // Services & Timeline. Valor: luthier/dono informa; balcão deixa "a definir" (null) para o
+  // diagnóstico na bancada.
+  const canSetPrice = currentRole === 'luthier';
   const [selectedServices, setSelectedServices] = useState<
-    { title: string; laborPrice: number; selected: boolean }[]
-  >(COMMON_SERVICES.map((s) => ({ ...s, selected: false })));
+    { title: string; laborPrice: number | null; selected: boolean }[]
+  >(() =>
+    COMMON_SERVICES.map((s) => ({ ...s, laborPrice: canSetPrice ? s.laborPrice : null, selected: false }))
+  );
+  const [customService, setCustomService] = useState('');
   const [estimatedDeliveryDays, setEstimatedDeliveryDays] = useState(5);
   const [priority, setPriority] = useState<'normal' | 'alta' | 'urgente'>('normal');
 
-  // Load draft from localStorage on mount
-  useEffect(() => {
-    if (isNewOrderWizardOpen) {
-      const draft = localStorage.getItem('luthier_os_wizard_draft');
-      if (draft) {
-        try {
-          const parsed = JSON.parse(draft);
-          if (parsed.reportedIssue) setReportedIssue(parsed.reportedIssue);
-          if (parsed.selectedClientId) setSelectedClientId(parsed.selectedClientId);
-        } catch {
-          // ignore
-        }
-      }
-    }
-  }, [isNewOrderWizardOpen]);
-
-  // Auto-save draft
-  useEffect(() => {
-    if (isNewOrderWizardOpen) {
-      localStorage.setItem(
-        'luthier_os_wizard_draft',
-        JSON.stringify({ reportedIssue, selectedClientId })
-      );
-    }
-  }, [reportedIssue, selectedClientId, isNewOrderWizardOpen]);
-
-  if (!isNewOrderWizardOpen) return null;
 
   // Filter instruments belonging to selected client
   const clientInstruments = instruments.filter(
@@ -254,7 +241,7 @@ export const NewOrderWizardModal: React.FC = () => {
       .map((s, idx) => ({
         id: 'srv-' + Date.now() + '-' + idx,
         title: s.title,
-        laborPrice: s.laborPrice,
+        laborPrice: s.laborPrice ?? 0,
         done: false,
         partsUsed: [],
       }));
@@ -264,7 +251,7 @@ export const NewOrderWizardModal: React.FC = () => {
       finalServices.push({
         id: 'srv-' + Date.now(),
         title: 'Diagnóstico e Regulagem Padrão',
-        laborPrice: 150,
+        laborPrice: canSetPrice ? 150 : 0,
         done: false,
         partsUsed: [],
       });
@@ -293,9 +280,6 @@ export const NewOrderWizardModal: React.FC = () => {
     } catch {
       return;
     }
-
-    // Clear draft
-    localStorage.removeItem('luthier_os_wizard_draft');
 
     setIsNewOrderWizardOpen(false);
     setActiveOrderId(created.id);
@@ -626,43 +610,93 @@ export const NewOrderWizardModal: React.FC = () => {
                 <label className="text-[11px] font-semibold text-base-400 uppercase tracking-wider block">
                   Serviços Sugeridos (Selecione os aplicáveis):
                 </label>
-                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
                   {selectedServices.map((svc, idx) => (
-                    <button
+                    <div
                       key={idx}
-                      type="button"
-                      onClick={() => {
-                        triggerHaptic();
-                        setSelectedServices((prev) =>
-                          prev.map((s, i) =>
-                            i === idx ? { ...s, selected: !s.selected } : s
-                          )
-                        );
-                      }}
-                      className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-left text-xs transition-colors ${
+                      className={`w-full flex items-center justify-between gap-2 p-2.5 rounded-xl border text-xs transition-colors ${
                         svc.selected
                           ? 'bg-accent-950/60 border-accent-500 text-accent-100'
-                          : 'bg-base-950 border-base-800 text-base-300 hover:bg-base-850'
+                          : 'bg-base-950 border-base-800 text-base-300'
                       }`}
                     >
-                      <span className="truncate pr-2 font-medium">{svc.title}</span>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className="font-semibold text-accent-400">
-                          R$ {svc.laborPrice}
-                        </span>
-                        <div
-                          className={`w-4 h-4 rounded border flex items-center justify-center ${
-                            svc.selected
-                              ? 'bg-accent-600 border-accent-500 text-on-accent'
-                              : 'border-base-600'
+                      <button
+                        type="button"
+                        aria-pressed={svc.selected}
+                        onClick={() => {
+                          triggerHaptic();
+                          setSelectedServices((prev) =>
+                            prev.map((s, i) => (i === idx ? { ...s, selected: !s.selected } : s))
+                          );
+                        }}
+                        className="flex items-center gap-2 min-w-0 flex-1 text-left"
+                      >
+                        <span
+                          className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                            svc.selected ? 'bg-accent-600 border-accent-500 text-on-accent' : 'border-base-600'
                           }`}
                         >
                           {svc.selected && <CheckCircle2 className="w-3.5 h-3.5" />}
-                        </div>
-                      </div>
-                    </button>
+                        </span>
+                        <span className="truncate font-medium">{svc.title}</span>
+                      </button>
+                      {canSetPrice && svc.selected ? (
+                        <label className="flex items-center gap-1 shrink-0 bg-base-900 border border-base-700 rounded-lg px-2 py-1">
+                          <span className="text-base-400">R$</span>
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            min={0}
+                            step="0.01"
+                            aria-label={`Valor de ${svc.title}`}
+                            placeholder="0,00"
+                            value={svc.laborPrice ?? ''}
+                            onChange={(e) => {
+                              const v = e.target.value === '' ? null : Math.max(0, Number(e.target.value));
+                              setSelectedServices((prev) =>
+                                prev.map((s, i) => (i === idx ? { ...s, laborPrice: v } : s))
+                              );
+                            }}
+                            className="w-16 bg-transparent text-base-50 font-semibold focus:outline-none"
+                          />
+                        </label>
+                      ) : (
+                        <span className={`shrink-0 font-semibold ${svc.laborPrice == null ? 'text-base-500' : 'text-accent-400'}`}>
+                          {svc.laborPrice == null ? 'a definir' : `R$ ${svc.laborPrice}`}
+                        </span>
+                      )}
+                    </div>
                   ))}
                 </div>
+                <div className="flex gap-1.5 pt-1">
+                  <input
+                    type="text"
+                    value={customService}
+                    onChange={(e) => setCustomService(e.target.value)}
+                    placeholder="Outro serviço (ex: troca de captador)"
+                    className="flex-1 px-3 py-2 rounded-xl bg-base-950 border border-base-700 text-xs text-base-50 placeholder-base-500 focus:outline-none focus:border-accent-500"
+                  />
+                  <button
+                    type="button"
+                    disabled={!customService.trim()}
+                    onClick={() => {
+                      triggerHaptic();
+                      setSelectedServices((prev) => [
+                        ...prev,
+                        { title: customService.trim(), laborPrice: null, selected: true },
+                      ]);
+                      setCustomService('');
+                    }}
+                    className="px-3 rounded-xl bg-base-800 text-accent-400 text-xs font-semibold flex items-center gap-1 disabled:opacity-50"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Adicionar
+                  </button>
+                </div>
+                {!canSetPrice && (
+                  <p className="text-[10px] text-base-500">
+                    Os valores são definidos pelo luthier no diagnóstico, antes do orçamento.
+                  </p>
+                )}
               </div>
 
               {/* Delivery Days & Priority */}

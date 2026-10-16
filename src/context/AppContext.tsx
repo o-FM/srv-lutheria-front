@@ -78,6 +78,7 @@ interface AppContextType {
   updateOrder: (orderId: string, updates: Partial<Order>) => void;
   createOrder: (orderData: Partial<Order>, clientId: string, instrumentId: string) => Promise<Order>;
   addServiceItem: (orderId: string, service: Omit<ServiceItem, 'id'>) => void;
+  updateServicePrice: (orderId: string, serviceId: string, laborPrice: number) => void;
   toggleServiceDone: (orderId: string, serviceId: string) => void;
   addOrderPhoto: (orderId: string, photo: Omit<Photo, 'id' | 'timestamp'>) => void;
   approveQuote: (orderId: string) => void;
@@ -637,6 +638,41 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     [applyOrder, fail]
   );
 
+  const updateServicePrice = useCallback(
+    (orderId: string, serviceId: string, laborPrice: number) => {
+      if (isApiMode) {
+        api.orders
+          .updateService(orderId, serviceId, { laborPrice })
+          .then((dto) => {
+            applyOrder(dto);
+            showToast({ title: 'Valor do serviço atualizado', type: 'success' });
+          })
+          .catch((e) => fail(e, 'Valor não salvo'));
+        return;
+      }
+      setOrders((prev) =>
+        prev.map((order) => {
+          if (order.id !== orderId) return order;
+          const services = order.services.map((s) => (s.id === serviceId ? { ...s, laborPrice } : s));
+          const laborTotal = services.reduce((acc, s) => acc + s.laborPrice, 0);
+          const partsTotal = services.reduce(
+            (acc, s) => acc + s.partsUsed.reduce((pAcc, p) => pAcc + p.unitPrice * p.quantity, 0),
+            0
+          );
+          return {
+            ...order,
+            services,
+            totalAmount: laborTotal + partsTotal,
+            quote: order.quote
+              ? { ...order.quote, laborTotal, partsTotal, grandTotal: laborTotal + partsTotal - (order.quote.discount || 0) }
+              : order.quote,
+          };
+        })
+      );
+    },
+    [applyOrder, fail, showToast]
+  );
+
   const toggleServiceDone = useCallback(
     (orderId: string, serviceId: string) => {
       triggerHaptic();
@@ -1155,6 +1191,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         advanceOrderStatus,
         updateOrder,
         createOrder,
+        updateServicePrice,
         addServiceItem,
         toggleServiceDone,
         addOrderPhoto,

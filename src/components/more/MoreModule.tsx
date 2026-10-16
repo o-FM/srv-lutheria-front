@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { isApiMode } from '../../config/env';
 import { AppearanceSettings } from '../settings/AppearanceSettings';
+import { TeamSettings } from '../settings/TeamSettings';
+import { useIsAdmin } from '../../hooks/useIsAdmin';
 import {
   Calendar,
   DollarSign,
@@ -16,6 +18,7 @@ import {
   Sparkles,
   ChevronRight,
   TrendingUp,
+  Users,
 } from 'lucide-react';
 
 export const MoreModule: React.FC = () => {
@@ -31,13 +34,15 @@ export const MoreModule: React.FC = () => {
     showToast,
   } = useApp();
 
-  const [subSection, setSubSection] = useState<'agenda' | 'financeiro' | 'mensagens' | 'config'>(
-    'agenda'
-  );
+  const isAdmin = useIsAdmin();
+  const [subSection, setSubSection] = useState<
+    'agenda' | 'financeiro' | 'mensagens' | 'equipe' | 'config'
+  >('agenda');
 
-  // If Atendente tries to access financial or config tabs, redirect to agenda
+  // Faturamento e equipe são só do dono (ADMIN); config é da bancada
   const activeSubSection =
-    currentRole === 'atendente' && (subSection === 'financeiro' || subSection === 'config')
+    (!isAdmin && (subSection === 'financeiro' || subSection === 'equipe')) ||
+    (currentRole === 'atendente' && subSection === 'config')
       ? 'agenda'
       : subSection;
 
@@ -86,10 +91,9 @@ export const MoreModule: React.FC = () => {
 
   const navItems = [
     { id: 'agenda' as const, label: 'Agenda', icon: Calendar },
-    ...(currentRole === 'luthier'
-      ? [{ id: 'financeiro' as const, label: 'Financeiro', icon: DollarSign }]
-      : []),
+    ...(isAdmin ? [{ id: 'financeiro' as const, label: 'Financeiro', icon: DollarSign }] : []),
     { id: 'mensagens' as const, label: 'Mensagens', icon: MessageCircle },
+    ...(isAdmin ? [{ id: 'equipe' as const, label: 'Equipe', icon: Users }] : []),
     ...(currentRole === 'luthier'
       ? [{ id: 'config' as const, label: 'Config', icon: Settings }]
       : []),
@@ -101,27 +105,34 @@ export const MoreModule: React.FC = () => {
       <div className="flex items-center justify-between px-1">
         <div>
           <h2 className="text-sm font-semibold text-base-50">
-            {currentRole === 'luthier' ? 'Central de Gestão & Oficina (Admin)' : 'Recepção · Prazos & Mensagens'}
+            {isAdmin
+              ? 'Central de Gestão & Oficina (Admin)'
+              : currentRole === 'luthier'
+                ? 'Bancada · Prazos & Mensagens'
+                : 'Recepção · Prazos & Mensagens'}
           </h2>
           <p className="text-[11px] text-base-400">
-            {currentRole === 'luthier'
-              ? 'Acesso total a relatórios financeiros, agenda, avisos e configurações'
-              : 'Agenda de entregas e modelos de notificação para o balcão'}
+            {isAdmin
+              ? 'Faturamento, equipe, agenda, avisos e configurações'
+              : currentRole === 'luthier'
+                ? 'Agenda de entregas, avisos e aparência'
+                : 'Agenda de entregas e modelos de notificação para o balcão'}
           </p>
         </div>
         <span className={`text-[10px] font-semibold px-2 py-0.5 rounded uppercase tracking-wider ${
-          currentRole === 'luthier'
+          isAdmin
             ? 'bg-accent-950 text-accent-300 border border-accent-800'
             : 'bg-sky-950 text-sky-300 border border-sky-800'
         }`}>
-          {currentRole === 'luthier' ? 'Admin' : 'Balcão'}
+          {isAdmin ? 'Admin' : currentRole === 'luthier' ? 'Bancada' : 'Balcão'}
         </span>
       </div>
 
       {/* Sub-navigation tabs */}
-      <div className={`grid gap-1.5 bg-base-900 p-1 rounded-2xl border border-base-800 ${
-        navItems.length === 2 ? 'grid-cols-2' : 'grid-cols-4'
-      }`}>
+      <div
+        className="grid gap-1.5 bg-base-900 p-1 rounded-2xl border border-base-800"
+        style={{ gridTemplateColumns: `repeat(${navItems.length}, minmax(0, 1fr))` }}
+      >
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeSubSection === item.id;
@@ -140,7 +151,7 @@ export const MoreModule: React.FC = () => {
               }`}
             >
               <Icon className="w-4 h-4" />
-              <span>{item.label}</span>
+              <span className={`truncate max-w-full ${navItems.length > 4 ? "text-[10px] sm:text-xs" : ""}`}>{item.label}</span>
             </button>
           );
         })}
@@ -226,7 +237,7 @@ export const MoreModule: React.FC = () => {
       )}
 
       {/* 2. FINANCEIRO MODULE (Exclusive for Luthier/Dono) */}
-      {currentRole === 'luthier' && activeSubSection === 'financeiro' && (
+      {isAdmin && activeSubSection === 'financeiro' && (
         <div className="space-y-4 animate-in fade-in">
           {/* Revenue Card */}
           <div className="p-4 rounded-2xl bg-base-900 border border-base-800 space-y-3">
@@ -376,8 +387,19 @@ export const MoreModule: React.FC = () => {
         </div>
       )}
 
+      {/* EQUIPE (só administrador) */}
+      {isAdmin && activeSubSection === 'equipe' && (
+        <div className="p-4 rounded-2xl bg-base-900 border border-base-800 space-y-3 animate-in fade-in">
+          <div>
+            <h3 className="font-semibold text-sm text-base-50">Equipe da oficina</h3>
+            <p className="text-[11px] text-base-400">Cadastre luthiers, atendentes e estoquistas e defina o perfil de cada um.</p>
+          </div>
+          <TeamSettings />
+        </div>
+      )}
+
       {/* 4. CONFIGURAÇÕES MODULE */}
-      {subSection === 'config' && (
+      {activeSubSection === 'config' && (
         <div className="space-y-4 animate-in fade-in">
           <div className="p-4 rounded-2xl bg-base-900 border border-base-800 space-y-4">
             <h3 className="font-semibold text-sm text-base-50">Aparência</h3>

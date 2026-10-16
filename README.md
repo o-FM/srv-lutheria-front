@@ -95,6 +95,8 @@ src/
 | Portal do cliente (`/acompanhar/{token}`) | `/portal/orders/{token}` (+ approve/reject) |
 | Área do cliente (`/cliente`) | `/auth/customer/login`, `/client/orders` (+ approve/reject) |
 | Ficha do cliente → "Enviar código de acesso" | `POST /customers/{id}/access-code` |
+| Mais → Equipe (só administrador) | `GET/POST /users`, `PATCH /users/{id}/profile`, `POST /users/{id}/(de)activate` |
+| OS → valor do serviço (luthier/administrador, até enviar o orçamento) | `PUT /service-orders/{id}/services/{item}` |
 | Logs de auditoria (admin) | `GET /audit-logs` |
 
 Também prontos no cliente, para as próximas telas: catálogo de serviços, relatórios
@@ -106,12 +108,21 @@ alteração de dados da própria conta e o simulador offline.
 
 ## Área do cliente
 
-Quando a oficina abre uma OS, o backend envia **automaticamente pelo WhatsApp** o link
-`/cliente` e um código de acesso amigável no formato `K7QM-4XPA` (sem letras/números que se
-confundem). O cliente digita **só o código** — sem telefone, sem senha — e vê todas as OS dele
+Quando a oficina abre uma OS, o backend envia **automaticamente pelo WhatsApp** o link de
+acompanhamento da OS. Quando o cliente **aprova o orçamento por esse link**, recebe o código de
+acesso amigável no formato `K7QM-4XPA` (sem letras/números que se confundem) para a área `/cliente`. O cliente digita **só o código** — sem telefone, sem senha — e vê todas as OS dele
 naquela oficina, com andamento, orçamento (aprovar/recusar) e histórico. O código vale por 90 dias
-e pode ser usado várias vezes; cada OS nova troca o código. Se o cliente perder, o balcão usa
+e pode ser usado várias vezes; cada nova aprovação pelo link troca o código. Se o cliente perder, o balcão usa
 "Enviar código de acesso" na ficha do cliente. A sessão do cliente é separada da sessão do balcão.
+
+## Perfis
+
+| Perfil | Vê / faz |
+|---|---|
+| Administrador (dono) | Tudo, inclusive **faturamento** e **equipe** (cadastra luthiers, atendentes, estoquistas) |
+| Luthier | Bancada: diagnóstico, **valor dos serviços**, peças, conclusão, estoque. Sem faturamento |
+| Atendente | Balcão: clientes, abertura de OS (serviços com valor "a definir"), entregas e pagamentos |
+| Estoquista | Estoque |
 
 ## Aparência
 

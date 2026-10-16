@@ -1,5 +1,6 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
+import { useIsAdmin } from '../../hooks/useIsAdmin';
 import {
   ClipboardList,
   AlertTriangle,
@@ -34,6 +35,7 @@ export const HomeModule: React.FC = () => {
     advanceOrderStatus,
     triggerHaptic,
   } = useApp();
+  const isAdmin = useIsAdmin();
 
   // Metrics
   const activeOrders = orders.filter((o) => o.status !== 'entregue' && o.status !== 'cancelado');
@@ -77,7 +79,7 @@ export const HomeModule: React.FC = () => {
             </div>
             <p className="text-xs text-base-300 mt-0.5">
               {currentRole === 'luthier'
-                ? `${activeOrders.length} instrumentos em fluxo · Visão completa de bancada, prazos e faturamento`
+                ? `${activeOrders.length} instrumentos em fluxo · Bancada e prazos${isAdmin ? ' e faturamento' : ''}`
                 : `${activeOrders.length} instrumentos cadastrados · Foco em entrada rápida e entregas de hoje`}
             </p>
           </div>
@@ -115,7 +117,7 @@ export const HomeModule: React.FC = () => {
             <span className="text-[10px] text-base-500 block">aguardando</span>
           </div>
 
-          {currentRole === 'luthier' ? (
+          {isAdmin ? (
             <div
               onClick={() => setActiveTab('mais')}
               className="p-3 rounded-2xl bg-base-950/60 border border-base-800 cursor-pointer hover:border-accent-500/50 transition-colors"
