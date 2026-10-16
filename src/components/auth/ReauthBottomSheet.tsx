@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { authApi } from '../../services/authApi';
+import type { UserRole } from '../../types';
 import { formatCpf, isValidCpf, isValidEmail, cleanCpf } from '../../utils/cpfValidator';
 import {
   Lock,
@@ -40,7 +41,7 @@ export const ReauthBottomSheet: React.FC = () => {
         setIdentifier(user.email);
       } else if (reauthModal.targetRole) {
         // Pre-fill target role hint if switching
-        const targetEmails = {
+        const targetEmails: Partial<Record<UserRole, string>> = {
           luthier: 'armando.luthier@oficina.com',
           atendente: 'mariana.balcao@oficina.com',
           cliente: 'lucas.silveira@guitar.com',
@@ -135,7 +136,7 @@ export const ReauthBottomSheet: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in select-none">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 animate-in fade-in select-none">
       <div
         className="fixed inset-0"
         onClick={closeReauthModal}
@@ -145,19 +146,19 @@ export const ReauthBottomSheet: React.FC = () => {
         role="dialog"
         aria-modal="true"
         aria-labelledby="reauth-title"
-        className="relative z-10 w-full max-w-lg bg-stone-900 border-t sm:border border-stone-800 rounded-t-3xl sm:rounded-2xl flex flex-col overflow-hidden text-stone-100 shadow-2xl max-h-[90vh] pb-safe"
+        className="relative z-10 w-full max-w-lg bg-base-900 border-t sm:border border-base-800 rounded-t-2xl sm:rounded-2xl flex flex-col overflow-hidden text-base-100 shadow-lg max-h-[90vh] pb-safe"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-stone-800 bg-stone-950/80">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-base-800 bg-base-950/80">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-amber-950 border border-amber-800 flex items-center justify-center text-amber-400">
+            <div className="w-8 h-8 rounded-xl bg-accent-950 border border-accent-800 flex items-center justify-center text-accent-400">
               <Lock className="w-4 h-4" />
             </div>
             <div>
-              <h2 id="reauth-title" className="font-bold text-sm text-white">
+              <h2 id="reauth-title" className="font-semibold text-sm text-base-50">
                 {reauthModal.title}
               </h2>
-              <span className="text-[10px] text-amber-400 font-semibold flex items-center gap-1">
+              <span className="text-[10px] text-accent-400 font-semibold flex items-center gap-1">
                 <Clock className="w-3 h-3" /> Janela de segurança de 5 minutos
               </span>
             </div>
@@ -165,7 +166,7 @@ export const ReauthBottomSheet: React.FC = () => {
           <button
             type="button"
             onClick={closeReauthModal}
-            className="p-1 text-stone-400 hover:text-white rounded-lg transition-colors"
+            className="p-1 text-base-400 hover:text-base-50 rounded-lg transition-colors"
             aria-label="Cancelar reautenticação"
           >
             <X className="w-5 h-5" />
@@ -174,7 +175,7 @@ export const ReauthBottomSheet: React.FC = () => {
 
         {/* Content */}
         <div className="p-4 space-y-4 overflow-y-auto">
-          <p className="text-xs text-stone-300 leading-relaxed">
+          <p className="text-xs text-base-300 leading-relaxed">
             {reauthModal.description}
           </p>
 
@@ -193,7 +194,7 @@ export const ReauthBottomSheet: React.FC = () => {
             <div>
               <label
                 htmlFor="reauth-identifier"
-                className="block text-xs font-bold text-stone-400 uppercase tracking-wider mb-1"
+                className="block text-xs font-semibold text-base-400 uppercase tracking-wider mb-1"
               >
                 E-mail ou CPF
               </label>
@@ -206,14 +207,14 @@ export const ReauthBottomSheet: React.FC = () => {
                 value={identifier}
                 onChange={handleIdentifierChange}
                 placeholder="nome@email.com ou 000.000.000-00"
-                className="w-full px-3.5 py-3 bg-stone-950 border border-stone-800 rounded-xl text-sm text-white focus:outline-none focus:border-amber-500"
+                className="w-full px-3.5 py-3 bg-base-950 border border-base-800 rounded-xl text-sm text-base-50 focus:outline-none focus:border-accent-500"
               />
             </div>
 
             <div>
               <label
                 htmlFor="reauth-password"
-                className="block text-xs font-bold text-stone-400 uppercase tracking-wider mb-1"
+                className="block text-xs font-semibold text-base-400 uppercase tracking-wider mb-1"
               >
                 Senha
               </label>
@@ -228,12 +229,12 @@ export const ReauthBottomSheet: React.FC = () => {
                     setErrorMsg(null);
                   }}
                   placeholder="Digite sua senha"
-                  className="w-full pl-3.5 pr-12 py-3 bg-stone-950 border border-stone-800 rounded-xl text-sm text-white focus:outline-none focus:border-amber-500"
+                  className="w-full pl-3.5 pr-12 py-3 bg-base-950 border border-base-800 rounded-xl text-sm text-base-50 focus:outline-none focus:border-accent-500"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-1 top-1 bottom-1 w-11 flex items-center justify-center text-stone-400 hover:text-white"
+                  className="absolute right-1 top-1 bottom-1 w-11 flex items-center justify-center text-base-400 hover:text-base-50"
                   aria-label={showPassword ? 'Ocultar senha' : 'Exibir senha'}
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -242,11 +243,11 @@ export const ReauthBottomSheet: React.FC = () => {
             </div>
 
             {/* Hint for demo passwords */}
-            <div className="p-2.5 rounded-xl bg-stone-950/60 border border-stone-800/80 text-[11px] text-stone-400">
-              <span className="font-semibold text-stone-300">Senhas de teste: </span>
-              Luthier: <code className="text-amber-400 font-mono">Luthier@2026</code> ·
-              Balcão: <code className="text-amber-400 font-mono">Balcao@2026</code> ·
-              Cliente: <code className="text-amber-400 font-mono">Cliente@2026</code>
+            <div className="p-2.5 rounded-xl bg-base-950/60 border border-base-800/80 text-[11px] text-base-400">
+              <span className="font-semibold text-base-300">Senhas de teste: </span>
+              Luthier: <code className="text-accent-400 font-mono">Luthier@2026</code> ·
+              Balcão: <code className="text-accent-400 font-mono">Balcao@2026</code> ·
+              Cliente: <code className="text-accent-400 font-mono">Cliente@2026</code>
             </div>
 
             {/* Actions */}
@@ -254,14 +255,14 @@ export const ReauthBottomSheet: React.FC = () => {
               <button
                 type="button"
                 onClick={closeReauthModal}
-                className="flex-1 py-3 px-4 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-300 text-xs font-semibold transition-colors"
+                className="flex-1 py-3 px-4 rounded-xl bg-base-800 hover:bg-base-700 text-base-300 text-xs font-semibold transition-colors"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={isLoading}
-                className="flex-1 py-3 px-4 rounded-xl bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-md active:scale-95 flex items-center justify-center gap-1.5"
+                className="flex-1 py-3 px-4 rounded-xl bg-accent-600 hover:bg-accent-500 disabled:opacity-50 text-on-accent text-xs font-semibold transition-all active:scale-95 flex items-center justify-center gap-1.5"
               >
                 {isLoading ? (
                   <>

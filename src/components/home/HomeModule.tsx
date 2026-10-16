@@ -15,6 +15,7 @@ import {
   DollarSign,
   Users,
   MessageCircle,
+  Guitar,
 } from 'lucide-react';
 
 export const HomeModule: React.FC = () => {
@@ -62,26 +63,25 @@ export const HomeModule: React.FC = () => {
   };
 
   return (
-    <div className="space-y-4 pb-24 max-w-4xl mx-auto">
+    <div className="space-y-5">
       {/* Top Banner / Greeting */}
-      <div className="p-4 rounded-3xl bg-gradient-to-br from-stone-900 via-stone-900 to-amber-950/60 border border-stone-800 shadow-xl space-y-3">
+      <div className="p-4 rounded-2xl bg-base-900 border border-base-800 space-y-3">
         <div className="flex items-start justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xl">{currentRole === 'luthier' ? '🪵' : '📋'}</span>
-              <h1 className="text-base sm:text-lg font-black text-white tracking-tight">
+              <h1 className="text-base sm:text-lg font-semibold text-base-50 tracking-tight">
                 {currentRole === 'luthier'
-                  ? 'Bancada do Luthier & Gestão (Admin)'
-                  : 'Recepção da Oficina & Balcão'}
+                  ? 'Bancada e gestão'
+                  : 'Recepção'}
               </h1>
             </div>
-            <p className="text-xs text-stone-300 mt-0.5">
+            <p className="text-xs text-base-300 mt-0.5">
               {currentRole === 'luthier'
                 ? `${activeOrders.length} instrumentos em fluxo · Visão completa de bancada, prazos e faturamento`
                 : `${activeOrders.length} instrumentos cadastrados · Foco em entrada rápida e entregas de hoje`}
             </p>
           </div>
-          <span className="text-xs font-mono font-bold text-amber-400 bg-amber-950/80 px-2.5 py-1 rounded-xl border border-amber-800">
+          <span className="text-xs font-mono font-semibold text-accent-400 bg-accent-950/80 px-2.5 py-1 rounded-xl border border-accent-800">
             {new Date().toLocaleDateString('pt-BR', { weekday: 'short', day: 'numeric', month: 'short' })}
           </span>
         </div>
@@ -90,38 +90,38 @@ export const HomeModule: React.FC = () => {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
           <div
             onClick={() => setActiveTab('os')}
-            className="p-3 rounded-2xl bg-stone-950/60 border border-stone-800 cursor-pointer hover:border-amber-500/50 transition-colors"
+            className="p-3 rounded-2xl bg-base-950/60 border border-base-800 cursor-pointer hover:border-accent-500/50 transition-colors"
           >
-            <span className="text-[10px] text-stone-400 block font-semibold uppercase">Na Bancada</span>
-            <span className="text-xl font-mono font-black text-amber-400">{onBench}</span>
-            <span className="text-[10px] text-stone-500 block">em execução</span>
+            <span className="text-[10px] text-base-400 block font-semibold uppercase">Na Bancada</span>
+            <span className="text-xl font-mono font-semibold text-accent-400">{onBench}</span>
+            <span className="text-[10px] text-base-500 block">em execução</span>
           </div>
 
           <div
             onClick={() => setActiveTab('os')}
-            className="p-3 rounded-2xl bg-stone-950/60 border border-stone-800 cursor-pointer hover:border-amber-500/50 transition-colors"
+            className="p-3 rounded-2xl bg-base-950/60 border border-base-800 cursor-pointer hover:border-accent-500/50 transition-colors"
           >
-            <span className="text-[10px] text-stone-400 block font-semibold uppercase">Prontos</span>
-            <span className="text-xl font-mono font-black text-emerald-400">{readyForDelivery}</span>
-            <span className="text-[10px] text-stone-500 block">p/ retirada</span>
+            <span className="text-[10px] text-base-400 block font-semibold uppercase">Prontos</span>
+            <span className="text-xl font-mono font-semibold text-emerald-400">{readyForDelivery}</span>
+            <span className="text-[10px] text-base-500 block">p/ retirada</span>
           </div>
 
           <div
             onClick={() => setActiveTab('os')}
-            className="p-3 rounded-2xl bg-stone-950/60 border border-stone-800 cursor-pointer hover:border-amber-500/50 transition-colors"
+            className="p-3 rounded-2xl bg-base-950/60 border border-base-800 cursor-pointer hover:border-accent-500/50 transition-colors"
           >
-            <span className="text-[10px] text-stone-400 block font-semibold uppercase">Orçamentos</span>
-            <span className="text-xl font-mono font-black text-amber-300">{pendingApprovals}</span>
-            <span className="text-[10px] text-stone-500 block">aguardando</span>
+            <span className="text-[10px] text-base-400 block font-semibold uppercase">Orçamentos</span>
+            <span className="text-xl font-mono font-semibold text-accent-300">{pendingApprovals}</span>
+            <span className="text-[10px] text-base-500 block">aguardando</span>
           </div>
 
           {currentRole === 'luthier' ? (
             <div
               onClick={() => setActiveTab('mais')}
-              className="p-3 rounded-2xl bg-stone-950/60 border border-stone-800 cursor-pointer hover:border-amber-500/50 transition-colors"
+              className="p-3 rounded-2xl bg-base-950/60 border border-base-800 cursor-pointer hover:border-accent-500/50 transition-colors"
             >
-              <span className="text-[10px] text-stone-400 block font-semibold uppercase">Faturamento</span>
-              <span className="text-base sm:text-lg font-mono font-black text-stone-200">
+              <span className="text-[10px] text-base-400 block font-semibold uppercase">Faturamento</span>
+              <span className="text-base sm:text-lg font-mono font-semibold text-base-200">
                 R$ {totalMonthlyBilling.toFixed(0)}
               </span>
               <span className="text-[10px] text-emerald-400 block">mês vigente</span>
@@ -129,13 +129,13 @@ export const HomeModule: React.FC = () => {
           ) : (
             <div
               onClick={() => setActiveTab('clientes')}
-              className="p-3 rounded-2xl bg-stone-950/60 border border-stone-800 cursor-pointer hover:border-amber-500/50 transition-colors"
+              className="p-3 rounded-2xl bg-base-950/60 border border-base-800 cursor-pointer hover:border-accent-500/50 transition-colors"
             >
-              <span className="text-[10px] text-stone-400 block font-semibold uppercase">Clientes</span>
-              <span className="text-xl font-mono font-black text-amber-400">
+              <span className="text-[10px] text-base-400 block font-semibold uppercase">Clientes</span>
+              <span className="text-xl font-mono font-semibold text-accent-400">
                 {clients.length}
               </span>
-              <span className="text-[10px] text-stone-500 block">cadastrados</span>
+              <span className="text-[10px] text-base-500 block">cadastrados</span>
             </div>
           )}
         </div>
@@ -150,7 +150,7 @@ export const HomeModule: React.FC = () => {
           <div className="flex items-center gap-2.5 min-w-0">
             <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
             <div className="min-w-0">
-              <p className="text-xs font-bold text-white truncate">
+              <p className="text-xs font-semibold text-base-50 truncate">
                 {lowStockItems.length} itens abaixo do estoque mínimo
               </p>
               <p className="text-[11px] text-rose-300 truncate">
@@ -164,8 +164,8 @@ export const HomeModule: React.FC = () => {
 
       {/* Thumb-Zone Quick Shortcuts Grid */}
       <div className="space-y-2">
-        <span className="text-[11px] font-bold text-stone-400 uppercase tracking-wider block">
-          Ações Rápidas do Dia (Zona do Polegar)
+        <span className="text-[11px] font-semibold text-base-400 uppercase tracking-wider block">
+          Ações rápidas
         </span>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {/* Quick Order Button (Both Luthier and Atendente) */}
@@ -175,14 +175,14 @@ export const HomeModule: React.FC = () => {
               triggerHaptic();
               setIsNewOrderWizardOpen(true);
             }}
-            className="p-3.5 rounded-2xl bg-gradient-to-br from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white flex flex-col items-start gap-1.5 shadow-md active:scale-95 transition-all text-left"
+            className="p-3.5 rounded-2xl bg-accent-600 hover:bg-accent-500 text-on-accent flex flex-col items-start gap-1.5 active:scale-95 transition-all text-left"
           >
             <div className="w-8 h-8 rounded-xl bg-black/20 flex items-center justify-center">
               <Plus className="w-5 h-5 stroke-[3]" />
             </div>
             <div>
-              <p className="text-xs font-black tracking-tight">NOVA OS</p>
-              <span className="text-[10px] text-amber-200/90">&lt; 60 seg c/ foto</span>
+              <p className="text-xs font-semibold tracking-tight">NOVA OS</p>
+              <span className="text-[11px] text-on-accent/80">Cliente, instrumento e defeito</span>
             </div>
           </button>
 
@@ -192,14 +192,14 @@ export const HomeModule: React.FC = () => {
               <button
                 type="button"
                 onClick={handleQuickPhoto}
-                className="p-3.5 rounded-2xl bg-stone-900 border border-stone-800 hover:border-amber-500/50 text-white flex flex-col items-start gap-1.5 shadow-sm active:scale-95 transition-all text-left"
+                className="p-3.5 rounded-2xl bg-base-900 border border-base-800 hover:border-accent-500/50 text-base-50 flex flex-col items-start gap-1.5 shadow-sm active:scale-95 transition-all text-left"
               >
-                <div className="w-8 h-8 rounded-xl bg-amber-950 text-amber-400 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-xl bg-accent-950 text-accent-400 flex items-center justify-center">
                   <Camera className="w-4 h-4" />
                 </div>
                 <div>
-                  <p className="text-xs font-bold">Foto da Bancada</p>
-                  <span className="text-[10px] text-stone-400">Antes / depois rápido</span>
+                  <p className="text-xs font-semibold">Foto da Bancada</p>
+                  <span className="text-[10px] text-base-400">Antes / depois rápido</span>
                 </div>
               </button>
 
@@ -210,14 +210,14 @@ export const HomeModule: React.FC = () => {
                   triggerHaptic();
                   setIsWorkbenchModeOpen(true);
                 }}
-                className="p-3.5 rounded-2xl bg-stone-900 border border-stone-800 hover:border-amber-500/50 text-white flex flex-col items-start gap-1.5 shadow-sm active:scale-95 transition-all text-left"
+                className="p-3.5 rounded-2xl bg-base-900 border border-base-800 hover:border-accent-500/50 text-base-50 flex flex-col items-start gap-1.5 shadow-sm active:scale-95 transition-all text-left"
               >
-                <div className="w-8 h-8 rounded-xl bg-amber-950 text-amber-400 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-xl bg-accent-950 text-accent-400 flex items-center justify-center">
                   <Hammer className="w-4 h-4" />
                 </div>
                 <div>
-                  <p className="text-xs font-bold">Modo Bancada</p>
-                  <span className="text-[10px] text-stone-400">Botões gigantes</span>
+                  <p className="text-xs font-semibold">Modo Bancada</p>
+                  <span className="text-[10px] text-base-400">Botões gigantes</span>
                 </div>
               </button>
 
@@ -228,14 +228,14 @@ export const HomeModule: React.FC = () => {
                   triggerHaptic();
                   setActiveTab('estoque');
                 }}
-                className="p-3.5 rounded-2xl bg-stone-900 border border-stone-800 hover:border-amber-500/50 text-white flex flex-col items-start gap-1.5 shadow-sm active:scale-95 transition-all text-left"
+                className="p-3.5 rounded-2xl bg-base-900 border border-base-800 hover:border-accent-500/50 text-base-50 flex flex-col items-start gap-1.5 shadow-sm active:scale-95 transition-all text-left"
               >
-                <div className="w-8 h-8 rounded-xl bg-amber-950 text-amber-400 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-xl bg-accent-950 text-accent-400 flex items-center justify-center">
                   <Package className="w-4 h-4" />
                 </div>
                 <div>
-                  <p className="text-xs font-bold">Peças & Cordas</p>
-                  <span className="text-[10px] text-stone-400">Leitor QR / Estoque</span>
+                  <p className="text-xs font-semibold">Peças & Cordas</p>
+                  <span className="text-[10px] text-base-400">Leitor QR / Estoque</span>
                 </div>
               </button>
             </>
@@ -248,14 +248,14 @@ export const HomeModule: React.FC = () => {
                   triggerHaptic();
                   setActiveTab('clientes');
                 }}
-                className="p-3.5 rounded-2xl bg-stone-900 border border-stone-800 hover:border-amber-500/50 text-white flex flex-col items-start gap-1.5 shadow-sm active:scale-95 transition-all text-left"
+                className="p-3.5 rounded-2xl bg-base-900 border border-base-800 hover:border-accent-500/50 text-base-50 flex flex-col items-start gap-1.5 shadow-sm active:scale-95 transition-all text-left"
               >
-                <div className="w-8 h-8 rounded-xl bg-amber-950 text-amber-400 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-xl bg-accent-950 text-accent-400 flex items-center justify-center">
                   <Users className="w-4 h-4" />
                 </div>
                 <div>
-                  <p className="text-xs font-bold">Cadastrar Cliente</p>
-                  <span className="text-[10px] text-stone-400">Balcão de entrada</span>
+                  <p className="text-xs font-semibold">Cadastrar Cliente</p>
+                  <span className="text-[10px] text-base-400">Balcão de entrada</span>
                 </div>
               </button>
 
@@ -266,14 +266,14 @@ export const HomeModule: React.FC = () => {
                   triggerHaptic();
                   setActiveTab('os');
                 }}
-                className="p-3.5 rounded-2xl bg-stone-900 border border-stone-800 hover:border-amber-500/50 text-white flex flex-col items-start gap-1.5 shadow-sm active:scale-95 transition-all text-left"
+                className="p-3.5 rounded-2xl bg-base-900 border border-base-800 hover:border-accent-500/50 text-base-50 flex flex-col items-start gap-1.5 shadow-sm active:scale-95 transition-all text-left"
               >
                 <div className="w-8 h-8 rounded-xl bg-emerald-950 text-emerald-400 flex items-center justify-center">
                   <CheckCircle2 className="w-4 h-4" />
                 </div>
                 <div>
-                  <p className="text-xs font-bold">Prontos p/ Retirada</p>
-                  <span className="text-[10px] text-stone-400">{readyForDelivery} aguardando</span>
+                  <p className="text-xs font-semibold">Prontos p/ Retirada</p>
+                  <span className="text-[10px] text-base-400">{readyForDelivery} aguardando</span>
                 </div>
               </button>
 
@@ -284,14 +284,14 @@ export const HomeModule: React.FC = () => {
                   triggerHaptic();
                   setActiveTab('mais');
                 }}
-                className="p-3.5 rounded-2xl bg-stone-900 border border-stone-800 hover:border-amber-500/50 text-white flex flex-col items-start gap-1.5 shadow-sm active:scale-95 transition-all text-left"
+                className="p-3.5 rounded-2xl bg-base-900 border border-base-800 hover:border-accent-500/50 text-base-50 flex flex-col items-start gap-1.5 shadow-sm active:scale-95 transition-all text-left"
               >
                 <div className="w-8 h-8 rounded-xl bg-emerald-950 text-emerald-400 flex items-center justify-center">
                   <MessageCircle className="w-4 h-4" />
                 </div>
                 <div>
-                  <p className="text-xs font-bold">Avisos no WhatsApp</p>
-                  <span className="text-[10px] text-stone-400">Notificar clientes</span>
+                  <p className="text-xs font-semibold">Avisos no WhatsApp</p>
+                  <span className="text-[10px] text-base-400">Notificar clientes</span>
                 </div>
               </button>
             </>
@@ -302,13 +302,13 @@ export const HomeModule: React.FC = () => {
       {/* Priority Instruments for Today */}
       <div className="space-y-2.5">
         <div className="flex items-center justify-between">
-          <span className="text-[11px] font-bold text-stone-400 uppercase tracking-wider">
-            Prioridades & Prazos da Semana ({activeOrders.length})
+          <span className="text-[11px] font-semibold text-base-400 uppercase tracking-wider">
+            Prazos da semana ({activeOrders.length})
           </span>
           <button
             type="button"
             onClick={() => setActiveTab('os')}
-            className="text-xs text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1"
+            className="text-xs text-accent-400 hover:text-accent-300 font-semibold flex items-center gap-1"
           >
             Ver Todas
             <ChevronRight className="w-3.5 h-3.5" />
@@ -324,7 +324,7 @@ export const HomeModule: React.FC = () => {
             return (
               <div
                 key={ord.id}
-                className="p-3.5 rounded-2xl bg-stone-900 border border-stone-800 hover:border-stone-700 transition-all shadow-md space-y-2.5"
+                className="p-3.5 rounded-2xl bg-base-900 border border-base-800 hover:border-base-700 transition-all space-y-2.5"
               >
                 <div
                   onClick={() => {
@@ -334,7 +334,7 @@ export const HomeModule: React.FC = () => {
                   className="cursor-pointer flex items-center justify-between gap-3"
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-12 h-12 rounded-xl bg-stone-950 border border-stone-800 overflow-hidden shrink-0 flex items-center justify-center">
+                    <div className="w-12 h-12 rounded-xl bg-base-950 border border-base-800 overflow-hidden shrink-0 flex items-center justify-center">
                       {ord.photos[0] ? (
                         <img
                           src={ord.photos[0].url}
@@ -342,31 +342,31 @@ export const HomeModule: React.FC = () => {
                           className="w-full h-full object-cover"
                         />
                       ) : (
-                        <span className="text-lg">🎸</span>
+                        <Guitar className="w-5 h-5 text-base-500" />
                       )}
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <span className="font-mono text-xs font-bold text-amber-400">
+                        <span className="font-mono text-xs font-semibold text-accent-400">
                           OS #{ord.orderNumber}
                         </span>
-                        <span className="text-xs font-bold text-white truncate">
+                        <span className="text-xs font-semibold text-base-50 truncate">
                           {inst?.brand} {inst?.model}
                         </span>
                       </div>
-                      <p className="text-xs text-stone-400 truncate mt-0.5">
+                      <p className="text-xs text-base-400 truncate mt-0.5">
                         {client?.name} · {ord.reportedIssue}
                       </p>
                     </div>
                   </div>
 
                   <span
-                    className={`shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase ${
+                    className={`shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-semibold uppercase ${
                       ord.status === 'em_execucao'
-                        ? 'bg-amber-950 text-amber-300 border border-amber-800'
+                        ? 'bg-accent-950 text-accent-300 border border-accent-800'
                         : ord.status === 'pronto'
                         ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
-                        : 'bg-stone-800 text-stone-300'
+                        : 'bg-base-800 text-base-300'
                     }`}
                   >
                     {ord.status.replace('_', ' ')}
@@ -374,9 +374,9 @@ export const HomeModule: React.FC = () => {
                 </div>
 
                 {/* Footer with 1-touch advance */}
-                <div className="pt-2 border-t border-stone-800/80 flex items-center justify-between text-xs">
-                  <span className="text-stone-400 text-[11px] flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5 text-amber-400" />
+                <div className="pt-2 border-t border-base-800/80 flex items-center justify-between text-xs">
+                  <span className="text-base-400 text-[11px] flex items-center gap-1">
+                    <Clock className="w-3.5 h-3.5 text-accent-400" />
                     Prazo: {ord.estimatedDeliveryDate.substring(5)} · {doneServices}/{ord.services.length} serviços
                   </span>
 
@@ -384,7 +384,7 @@ export const HomeModule: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => advanceOrderStatus(ord.id)}
-                      className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center gap-1 active:scale-95 transition-all shadow-sm"
+                      className="px-3 py-1.5 rounded-lg bg-accent-600 hover:bg-accent-500 text-on-accent font-semibold text-xs flex items-center gap-1 active:scale-95 transition-all shadow-sm"
                     >
                       <span>Avançar</span>
                       <ChevronRight className="w-3.5 h-3.5" />
@@ -396,7 +396,7 @@ export const HomeModule: React.FC = () => {
                         triggerHaptic();
                         advanceOrderStatus(ord.id, 'entregue', 'Entregue no balcão de atendimento');
                       }}
-                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1 active:scale-95 transition-all shadow-sm"
+                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-1 active:scale-95 transition-all shadow-sm"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" />
                       <span>Entregar</span>
@@ -408,7 +408,7 @@ export const HomeModule: React.FC = () => {
                         triggerHaptic();
                         setActiveOrderId(ord.id);
                       }}
-                      className="px-3 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-200 font-semibold text-xs flex items-center gap-1 active:scale-95 transition-all"
+                      className="px-3 py-1.5 rounded-lg bg-base-800 hover:bg-base-700 text-base-200 font-semibold text-xs flex items-center gap-1 active:scale-95 transition-all"
                     >
                       <span>Detalhes</span>
                       <ChevronRight className="w-3.5 h-3.5" />

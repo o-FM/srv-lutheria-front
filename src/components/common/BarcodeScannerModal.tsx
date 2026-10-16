@@ -49,18 +49,18 @@ export const BarcodeScannerModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-in fade-in">
-      <div className="w-full max-w-sm bg-stone-900 border border-stone-800 rounded-2xl overflow-hidden shadow-2xl text-stone-100">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 animate-in fade-in">
+      <div className="w-full max-w-sm bg-base-900 border border-base-800 rounded-2xl overflow-hidden shadow-lg text-base-100">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-stone-800 bg-stone-950/70">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-base-800 bg-base-950/70">
           <div className="flex items-center gap-2">
-            <QrCode className="w-5 h-5 text-amber-500" />
-            <span className="font-bold text-sm">Leitor de Código de Barras / QR</span>
+            <QrCode className="w-5 h-5 text-accent-500" />
+            <span className="font-semibold text-sm">Leitor de Código de Barras / QR</span>
           </div>
           <button
             type="button"
             onClick={closeBarcodeScanner}
-            className="p-1 text-stone-400 hover:text-white"
+            className="p-1 text-base-400 hover:text-base-50"
           >
             <X className="w-5 h-5" />
           </button>
@@ -68,16 +68,16 @@ export const BarcodeScannerModal: React.FC = () => {
 
         {/* Viewfinder simulator */}
         <div className="p-4 space-y-4">
-          <div className="relative aspect-square max-w-[240px] mx-auto bg-stone-950 rounded-2xl overflow-hidden border-2 border-stone-800 flex items-center justify-center">
+          <div className="relative aspect-square max-w-[240px] mx-auto bg-base-950 rounded-2xl overflow-hidden border-2 border-base-800 flex items-center justify-center">
             {/* Viewfinder brackets */}
-            <div className="absolute inset-4 border-2 border-dashed border-amber-500/50 rounded-xl pointer-events-none" />
+            <div className="absolute inset-4 border-2 border-dashed border-accent-500/50 rounded-xl pointer-events-none" />
             
             {/* Laser scanning beam animation */}
-            <div className="absolute left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-red-500 to-transparent shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-bounce duration-1000" />
+            <div className="absolute left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-red-500 to-transparent animate-bounce duration-1000" />
 
             <div className="text-center p-4">
-              <QrCode className="w-16 h-16 text-stone-700 mx-auto stroke-1" />
-              <p className="text-[11px] text-stone-400 mt-2">
+              <QrCode className="w-16 h-16 text-base-700 mx-auto stroke-1" />
+              <p className="text-[11px] text-base-400 mt-2">
                 Aponte a câmera da bancada para a etiqueta do produto
               </p>
             </div>
@@ -85,7 +85,7 @@ export const BarcodeScannerModal: React.FC = () => {
 
           {/* Quick simulation buttons of existing stock items */}
           <div className="space-y-1.5">
-            <p className="text-[11px] font-bold text-stone-400 uppercase tracking-wider">
+            <p className="text-[11px] font-semibold text-base-400 uppercase tracking-wider">
               Simular Leitura Instantânea (1 toque):
             </p>
             <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
@@ -94,10 +94,10 @@ export const BarcodeScannerModal: React.FC = () => {
                   key={item.id}
                   type="button"
                   onClick={() => handleScanCode(item.barcode)}
-                  className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 border border-stone-700/60 text-xs text-left transition-colors"
+                  className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-base-800 hover:bg-base-700 border border-base-700/60 text-xs text-left transition-colors"
                 >
-                  <span className="truncate text-stone-200">{item.name}</span>
-                  <span className="text-[10px] font-mono text-amber-400 font-semibold shrink-0 ml-2">
+                  <span className="truncate text-base-200">{item.name}</span>
+                  <span className="text-[10px] font-mono text-accent-400 font-semibold shrink-0 ml-2">
                     {item.barcode.slice(-5)}
                   </span>
                 </button>
@@ -106,19 +106,19 @@ export const BarcodeScannerModal: React.FC = () => {
           </div>
 
           {/* Manual input fallback */}
-          <div className="pt-2 border-t border-stone-800 flex gap-2">
+          <div className="pt-2 border-t border-base-800 flex gap-2">
             <input
               type="text"
               value={manualCode}
               onChange={(e) => setManualCode(e.target.value)}
               placeholder="Digitar código manualmente..."
-              className="flex-1 px-3 py-2 bg-stone-950 border border-stone-700 rounded-xl text-xs text-stone-100 focus:outline-none focus:border-amber-500"
+              className="flex-1 px-3 py-2 bg-base-950 border border-base-700 rounded-xl text-xs text-base-100 focus:outline-none focus:border-accent-500"
             />
             <button
               type="button"
               disabled={!manualCode.trim()}
               onClick={() => handleScanCode(manualCode.trim())}
-              className="px-3 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-xs font-semibold rounded-xl"
+              className="px-3 py-2 bg-accent-600 hover:bg-accent-500 disabled:opacity-50 text-on-accent text-xs font-semibold rounded-xl"
             >
               OK
             </button>

@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { isApiMode } from '../../config/env';
+import { BrandMark } from '../common/BrandMark';
 import { useApp } from '../../context/AppContext';
 import { formatCpf, isValidCpf, isValidEmail, cleanCpf } from '../../utils/cpfValidator';
 import {
@@ -125,7 +127,7 @@ export const LoginPage: React.FC = () => {
     try {
       const loggedUser = await login(identifier, password, rememberMe);
       // Sync AppContext's currentRole with the logged user role
-      setRole(loggedUser.role);
+      setRole(loggedUser.role, { silent: true });
     } catch (err: any) {
       triggerHaptic();
       if (err.locked) {
@@ -149,19 +151,15 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-stone-950 text-stone-100 flex flex-col justify-between px-4 py-6 sm:px-6 max-w-md mx-auto w-full select-none">
+    <div className="min-h-dvh bg-base-950 text-base-100 flex flex-col justify-between px-4 py-6 sm:px-6 max-w-sm mx-auto w-full">
       {/* Top Branding */}
-      <div className="pt-4 sm:pt-8 text-center space-y-3">
-        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-600 to-amber-800 flex items-center justify-center shadow-2xl mx-auto ring-4 ring-stone-900 border border-amber-500/30">
-          <span className="font-black text-white text-2xl tracking-tighter">OS</span>
+      <div className="pt-6 sm:pt-12 text-center space-y-4">
+        <div className="flex justify-center">
+          <BrandMark size="lg" />
         </div>
         <div>
-          <h1 className="text-xl sm:text-2xl font-black text-amber-100 tracking-tight">
-            Oficina Luthier
-          </h1>
-          <p className="text-xs text-stone-400 mt-1">
-            Gestão Artesanal & Ordens de Serviço
-          </p>
+          <h1 className="text-xl font-semibold text-base-50 tracking-tight">Oficina Luthier</h1>
+          <p className="text-sm text-base-400 mt-1">Entre para continuar</p>
         </div>
       </div>
 
@@ -182,15 +180,15 @@ export const LoginPage: React.FC = () => {
         {lockedInfo?.locked && (
           <div
             role="alert"
-            className="p-3.5 rounded-2xl bg-amber-950/80 border border-amber-700 text-amber-200 text-xs space-y-1"
+            className="p-3.5 rounded-2xl bg-accent-950/80 border border-accent-700 text-accent-200 text-xs space-y-1"
           >
-            <div className="flex items-center gap-2 font-bold text-white">
-              <Clock className="w-4 h-4 text-amber-400" />
+            <div className="flex items-center gap-2 font-semibold text-base-50">
+              <Clock className="w-4 h-4 text-accent-400" />
               <span>Conta Bloqueada Temporariamente</span>
             </div>
-            <p className="text-stone-300">
+            <p className="text-base-300">
               Múltiplas tentativas incorretas. Aguarde{' '}
-              <strong className="text-amber-300">
+              <strong className="text-accent-300">
                 {Math.floor(lockedInfo.remainingSeconds / 60)}m {lockedInfo.remainingSeconds % 60}s
               </strong>{' '}
               antes de tentar novamente.
@@ -215,9 +213,9 @@ export const LoginPage: React.FC = () => {
           <div>
             <label
               htmlFor="auth-identifier"
-              className="block text-xs font-bold text-stone-300 uppercase tracking-wider mb-1.5"
+              className="block text-xs font-semibold text-base-300 uppercase tracking-wider mb-1.5"
             >
-              E-mail ou CPF
+              {isApiMode ? 'E-mail' : 'E-mail ou CPF'}
             </label>
             <div className="relative">
               <input
@@ -231,16 +229,16 @@ export const LoginPage: React.FC = () => {
                 value={identifier}
                 onChange={handleIdentifierChange}
                 onBlur={handleIdentifierBlur}
-                placeholder="seu.email@exemplo.com ou 000.000.000-00"
+                placeholder={isApiMode ? 'seu.email@exemplo.com' : 'seu.email@exemplo.com ou 000.000.000-00'}
                 aria-describedby={fieldError ? 'identifier-error' : undefined}
                 aria-invalid={!!fieldError}
-                className={`w-full px-4 py-3.5 bg-stone-900 border rounded-2xl text-base text-stone-100 placeholder-stone-500 focus:outline-none transition-colors ${
+                className={`w-full px-4 py-3.5 bg-base-900 border rounded-2xl text-base text-base-100 placeholder-base-500 focus:outline-none transition-colors ${
                   fieldError
                     ? 'border-rose-600 focus:border-rose-500'
-                    : 'border-stone-800 focus:border-amber-500'
+                    : 'border-base-800 focus:border-accent-500'
                 }`}
               />
-              <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-500 pointer-events-none text-xs">
+              <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-base-500 pointer-events-none text-xs">
                 {isEmailMode ? '@' : 'CPF'}
               </span>
             </div>
@@ -256,14 +254,14 @@ export const LoginPage: React.FC = () => {
             <div className="flex items-center justify-between mb-1.5">
               <label
                 htmlFor="auth-password"
-                className="text-xs font-bold text-stone-300 uppercase tracking-wider"
+                className="text-xs font-semibold text-base-300 uppercase tracking-wider"
               >
                 Senha
               </label>
               <button
                 type="button"
                 onClick={() => setIsForgotPasswordOpen(true)}
-                className="text-xs text-amber-400 hover:text-amber-300 transition-colors"
+                className="text-xs text-accent-400 hover:text-accent-300 transition-colors"
               >
                 Esqueci minha senha
               </button>
@@ -280,13 +278,13 @@ export const LoginPage: React.FC = () => {
                   setGeneralError(null);
                 }}
                 placeholder="Digite sua senha de acesso"
-                className="w-full pl-4 pr-14 py-3.5 bg-stone-900 border border-stone-800 rounded-2xl text-base text-stone-100 placeholder-stone-500 focus:outline-none focus:border-amber-500 transition-colors"
+                className="w-full pl-4 pr-14 py-3.5 bg-base-900 border border-base-800 rounded-2xl text-base text-base-100 placeholder-base-500 focus:outline-none focus:border-accent-500 transition-colors"
               />
               {/* Show / Hide Password Button with 48px target */}
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-1 top-1 bottom-1 w-12 flex items-center justify-center text-stone-400 hover:text-stone-200 transition-colors"
+                className="absolute right-1 top-1 bottom-1 w-12 flex items-center justify-center text-base-400 hover:text-base-200 transition-colors"
                 aria-label={showPassword ? 'Ocultar senha' : 'Exibir senha'}
               >
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
@@ -301,11 +299,11 @@ export const LoginPage: React.FC = () => {
               id="remember-me"
               checked={rememberMe}
               onChange={(e) => setRememberMe(e.target.checked)}
-              className="w-4 h-4 rounded bg-stone-900 border-stone-700 text-amber-600 focus:ring-amber-500 accent-amber-600 cursor-pointer"
+              className="w-4 h-4 rounded bg-base-900 border-base-700 text-accent-600 focus:ring-accent-500 accent-accent-600 cursor-pointer"
             />
             <label
               htmlFor="remember-me"
-              className="text-xs text-stone-400 cursor-pointer select-none"
+              className="text-xs text-base-400 cursor-pointer select-none"
             >
               Manter conectado neste aparelho
             </label>
@@ -316,10 +314,10 @@ export const LoginPage: React.FC = () => {
             <button
               type="submit"
               disabled={isLoading || !!lockedInfo?.locked}
-              className={`w-full py-4 px-4 rounded-2xl text-sm font-bold text-white transition-all shadow-xl flex items-center justify-center gap-2 active:scale-98 ${
+              className={`w-full py-4 px-4 rounded-2xl text-sm font-semibold text-base-50 transition-all flex items-center justify-center gap-2 active:scale-98 ${
                 isLoading || lockedInfo?.locked
-                  ? 'bg-stone-800 text-stone-500 cursor-not-allowed'
-                  : 'bg-amber-600 hover:bg-amber-500 active:bg-amber-700 shadow-amber-950/60'
+                  ? 'bg-base-800 text-base-500 cursor-not-allowed'
+                  : 'bg-accent-600 hover:bg-accent-500 active:bg-accent-700 text-on-accent!'
               }`}
             >
               {isLoading ? (
@@ -334,47 +332,58 @@ export const LoginPage: React.FC = () => {
           </div>
         </form>
 
-        {/* Demo Accounts Quick-Select Card */}
-        <div className="pt-3 border-t border-stone-800/80 space-y-2">
-          <p className="text-[11px] font-bold text-stone-400 uppercase tracking-wider text-center">
+        {isApiMode && (
+          <p className="text-center text-sm text-base-400">
+            Ainda não tem conta?{' '}
+            <a href="/cadastro" className="text-accent-400 hover:underline">
+              Cadastre sua oficina
+            </a>
+          </p>
+        )}
+
+        {/* Demo Accounts Quick-Select Card (só no modo demonstração) */}
+        {!isApiMode && (
+        <div className="pt-3 border-t border-base-800/80 space-y-2">
+          <p className="text-[11px] font-semibold text-base-400 uppercase tracking-wider text-center">
             Contas de Teste Rápidas (1 toque):
           </p>
           <div className="grid grid-cols-3 gap-1.5 text-left">
             <button
               type="button"
               onClick={() => handleFillDemo('armando.luthier@oficina.com', 'Luthier@2026')}
-              className="p-2 rounded-xl bg-stone-900 border border-stone-800 hover:border-amber-600/60 text-xs transition-colors"
+              className="p-2 rounded-xl bg-base-900 border border-base-800 hover:border-accent-600/60 text-xs transition-colors"
             >
-              <span className="text-[10px] text-amber-400 block font-bold">Luthier/Dono</span>
-              <p className="font-semibold text-white truncate text-[11px]">Armando</p>
+              <span className="text-[10px] text-accent-400 block font-semibold">Luthier/Dono</span>
+              <p className="font-semibold text-base-50 truncate text-[11px]">Armando</p>
             </button>
             <button
               type="button"
               onClick={() => handleFillDemo('mariana.balcao@oficina.com', 'Balcao@2026')}
-              className="p-2 rounded-xl bg-stone-900 border border-stone-800 hover:border-amber-600/60 text-xs transition-colors"
+              className="p-2 rounded-xl bg-base-900 border border-base-800 hover:border-accent-600/60 text-xs transition-colors"
             >
-              <span className="text-[10px] text-amber-400 block font-bold">Atendente</span>
-              <p className="font-semibold text-white truncate text-[11px]">Mariana</p>
+              <span className="text-[10px] text-accent-400 block font-semibold">Atendente</span>
+              <p className="font-semibold text-base-50 truncate text-[11px]">Mariana</p>
             </button>
             <button
               type="button"
               onClick={() => handleFillDemo('lucas.silveira@guitar.com', 'Cliente@2026')}
-              className="p-2 rounded-xl bg-stone-900 border border-stone-800 hover:border-amber-600/60 text-xs transition-colors"
+              className="p-2 rounded-xl bg-base-900 border border-base-800 hover:border-accent-600/60 text-xs transition-colors"
             >
-              <span className="text-[10px] text-amber-400 block font-bold">Cliente</span>
-              <p className="font-semibold text-white truncate text-[11px]">Lucas S.</p>
+              <span className="text-[10px] text-accent-400 block font-semibold">Cliente</span>
+              <p className="font-semibold text-base-50 truncate text-[11px]">Lucas S.</p>
             </button>
           </div>
-          <p className="text-[10px] text-stone-500 text-center">
-            Ou teste usando CPF com máscara: <span className="font-mono text-stone-400">123.456.789-09</span>
+          <p className="text-[10px] text-base-500 text-center">
+            Ou teste usando CPF com máscara: <span className="font-mono text-base-400">123.456.789-09</span>
           </p>
         </div>
+        )}
       </div>
 
       {/* Footer Info & LGPD notice */}
       <footer className="text-center pt-2 pb-safe">
-        <p className="text-[11px] text-stone-500 flex items-center justify-center gap-1">
-          <ShieldCheck className="w-3.5 h-3.5 text-stone-400 inline" />
+        <p className="text-[11px] text-base-500 flex items-center justify-center gap-1">
+          <ShieldCheck className="w-3.5 h-3.5 text-base-400 inline" />
           Acesso seguro e auditado conforme LGPD
         </p>
       </footer>

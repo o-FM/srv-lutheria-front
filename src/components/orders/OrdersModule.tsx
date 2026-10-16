@@ -13,6 +13,7 @@ import {
   Plus,
   AlertTriangle,
   Camera,
+  Guitar,
 } from 'lucide-react';
 import { OrderStatus } from '../../types';
 
@@ -60,30 +61,30 @@ export const OrdersModule: React.FC = () => {
   });
 
   return (
-    <div className="space-y-4 pb-24 max-w-5xl mx-auto">
+    <div className="space-y-5">
       {/* Top Bar with Search & View Mode */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
         <div className="flex-1 relative">
-          <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-base-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchFilter}
             onChange={(e) => setSearchFilter(e.target.value)}
             placeholder="Filtrar por nº de OS, cliente ou instrumento..."
-            className="w-full pl-9 pr-3 py-2.5 bg-stone-900 border border-stone-800 rounded-xl text-xs text-white placeholder-stone-500 focus:outline-none focus:border-amber-500"
+            className="w-full pl-9 pr-3 py-2.5 bg-base-900 border border-base-800 rounded-xl text-xs text-base-50 placeholder-base-500 focus:outline-none focus:border-accent-500"
           />
         </div>
 
         <div className="flex items-center gap-2 justify-between sm:justify-end">
           {/* View toggle (List vs Kanban) */}
-          <div className="flex items-center bg-stone-900 border border-stone-800 p-0.5 rounded-xl">
+          <div className="flex items-center bg-base-900 border border-base-800 p-0.5 rounded-xl">
             <button
               type="button"
               onClick={() => setViewMode('lista')}
               className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors ${
                 viewMode === 'lista'
-                  ? 'bg-amber-600 text-white shadow-sm'
-                  : 'text-stone-400 hover:text-white'
+                  ? 'bg-accent-600 text-on-accent shadow-sm'
+                  : 'text-base-400 hover:text-base-50'
               }`}
               title="Visualização em lista corrida"
             >
@@ -95,8 +96,8 @@ export const OrdersModule: React.FC = () => {
               onClick={() => setViewMode('kanban')}
               className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors ${
                 viewMode === 'kanban'
-                  ? 'bg-amber-600 text-white shadow-sm'
-                  : 'text-stone-400 hover:text-white'
+                  ? 'bg-accent-600 text-on-accent shadow-sm'
+                  : 'text-base-400 hover:text-base-50'
               }`}
               title="Visualização Kanban por colunas de status"
             >
@@ -108,7 +109,7 @@ export const OrdersModule: React.FC = () => {
           <button
             type="button"
             onClick={() => setIsNewOrderWizardOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded-xl shadow-md active:scale-95 transition-all"
+            className="flex items-center gap-1.5 px-3 py-2 bg-accent-600 hover:bg-accent-500 text-on-accent text-xs font-semibold rounded-xl active:scale-95 transition-all"
           >
             <Plus className="w-4 h-4" />
             Nova OS
@@ -134,8 +135,8 @@ export const OrdersModule: React.FC = () => {
               }}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all border ${
                 isActive
-                  ? 'bg-amber-950 border-amber-600 text-amber-200 shadow-sm'
-                  : 'bg-stone-900 border-stone-800 text-stone-400 hover:text-stone-200'
+                  ? 'bg-accent-950 border-accent-600 text-accent-200 shadow-sm'
+                  : 'bg-base-900 border-base-800 text-base-400 hover:text-base-200'
               }`}
             >
               {opt.label} <span className="opacity-75 font-mono ml-0.5">({count})</span>
@@ -148,10 +149,10 @@ export const OrdersModule: React.FC = () => {
       {viewMode === 'lista' ? (
         <div className="space-y-3">
           {filteredOrders.length === 0 ? (
-            <div className="p-12 text-center bg-stone-900/40 rounded-2xl border border-stone-800 space-y-2">
-              <ClipboardList className="w-10 h-10 text-stone-600 mx-auto" />
-              <p className="text-sm font-semibold text-stone-300">Nenhuma OS encontrada</p>
-              <p className="text-xs text-stone-500">Tente ajustar seus filtros ou cadastre uma nova OS.</p>
+            <div className="p-12 text-center bg-base-900/40 rounded-2xl border border-base-800 space-y-2">
+              <ClipboardList className="w-10 h-10 text-base-600 mx-auto" />
+              <p className="text-sm font-semibold text-base-300">Nenhuma OS encontrada</p>
+              <p className="text-xs text-base-500">Tente ajustar seus filtros ou cadastre uma nova OS.</p>
             </div>
           ) : (
             filteredOrders.map((ord) => {
@@ -165,7 +166,7 @@ export const OrdersModule: React.FC = () => {
               return (
                 <div
                   key={ord.id}
-                  className="p-3.5 rounded-2xl bg-stone-900 border border-stone-800 hover:border-stone-700 transition-all shadow-md space-y-3"
+                  className="p-3.5 rounded-2xl bg-base-900 border border-base-800 hover:border-base-700 transition-all space-y-3"
                 >
                   <div
                     onClick={() => {
@@ -176,7 +177,7 @@ export const OrdersModule: React.FC = () => {
                   >
                     {/* Left: Thumbnail & Main info */}
                     <div className="flex items-start gap-3 min-w-0">
-                      <div className="w-14 h-14 rounded-xl bg-stone-950 border border-stone-800 overflow-hidden shrink-0 flex items-center justify-center relative">
+                      <div className="w-14 h-14 rounded-xl bg-base-950 border border-base-800 overflow-hidden shrink-0 flex items-center justify-center relative">
                         {hasPhoto ? (
                           <img
                             src={ord.photos[0].url}
@@ -184,30 +185,30 @@ export const OrdersModule: React.FC = () => {
                             className="w-full h-full object-cover"
                           />
                         ) : (
-                          <span className="text-xl">🎸</span>
+                          <Guitar className="w-6 h-6 text-base-500" />
                         )}
-                        <span className="absolute bottom-0 right-0 px-1 py-0.2 bg-black/80 text-[9px] font-mono font-bold text-amber-400">
+                        <span className="absolute bottom-0 right-0 px-1 py-0.2 bg-black/80 text-[9px] font-mono font-semibold text-accent-400">
                           #{ord.orderNumber}
                         </span>
                       </div>
 
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <h3 className="font-bold text-xs text-white truncate">
+                          <h3 className="font-semibold text-xs text-base-50 truncate">
                             {inst?.brand} {inst?.model}
                           </h3>
-                          <span className="text-[10px] text-stone-400">· {client?.name}</span>
+                          <span className="text-[10px] text-base-400">· {client?.name}</span>
                         </div>
-                        <p className="text-xs text-stone-300 line-clamp-1 mt-0.5">
+                        <p className="text-xs text-base-300 line-clamp-1 mt-0.5">
                           {ord.reportedIssue}
                         </p>
-                        <div className="flex items-center gap-2 mt-1 text-[11px] text-stone-400">
+                        <div className="flex items-center gap-2 mt-1 text-[11px] text-base-400">
                           <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3 text-amber-400" />
+                            <Clock className="w-3 h-3 text-accent-400" />
                             Prazo: {ord.estimatedDeliveryDate.substring(5)}
                           </span>
                           <span>·</span>
-                          <span className="font-mono text-amber-300 font-semibold">
+                          <span className="font-mono text-accent-300 font-semibold">
                             R$ {ord.totalAmount.toFixed(2)}
                           </span>
                         </div>
@@ -217,14 +218,14 @@ export const OrdersModule: React.FC = () => {
                     {/* Right: Status badge */}
                     <div className="text-right shrink-0">
                       <span
-                        className={`inline-block px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase ${
+                        className={`inline-block px-2 py-0.5 rounded-lg text-[10px] font-semibold uppercase ${
                           ord.status === 'em_execucao'
-                            ? 'bg-amber-950 text-amber-300 border border-amber-800 animate-pulse'
+                            ? 'bg-accent-950 text-accent-300 border border-accent-800 animate-pulse'
                             : ord.status === 'pronto'
                             ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
                             : ord.status === 'entregue'
-                            ? 'bg-stone-800 text-stone-400'
-                            : 'bg-stone-800 text-stone-300'
+                            ? 'bg-base-800 text-base-400'
+                            : 'bg-base-800 text-base-300'
                         }`}
                       >
                         {ord.status.replace('_', ' ')}
@@ -235,15 +236,15 @@ export const OrdersModule: React.FC = () => {
                   {/* Service Progress Bar */}
                   {totalCount > 0 && (
                     <div className="space-y-1">
-                      <div className="flex justify-between text-[10px] text-stone-400">
+                      <div className="flex justify-between text-[10px] text-base-400">
                         <span>
                           Checklist: {doneCount}/{totalCount} serviços
                         </span>
                         <span>{Math.round(progressPct)}%</span>
                       </div>
-                      <div className="w-full bg-stone-950 h-1.5 rounded-full overflow-hidden">
+                      <div className="w-full bg-base-950 h-1.5 rounded-full overflow-hidden">
                         <div
-                          className="bg-amber-500 h-1.5 rounded-full transition-all duration-300"
+                          className="bg-accent-500 h-1.5 rounded-full transition-all duration-300"
                           style={{ width: `${progressPct}%` }}
                         />
                       </div>
@@ -251,14 +252,14 @@ export const OrdersModule: React.FC = () => {
                   )}
 
                   {/* Fast Action Buttons on Card */}
-                  <div className="pt-2 border-t border-stone-800 flex items-center justify-between gap-2">
+                  <div className="pt-2 border-t border-base-800 flex items-center justify-between gap-2">
                     <button
                       type="button"
                       onClick={() => {
                         triggerHaptic();
                         setActiveOrderId(ord.id);
                       }}
-                      className="px-3 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-xs font-semibold text-stone-300 transition-colors"
+                      className="px-3 py-1.5 rounded-lg bg-base-800 hover:bg-base-700 text-xs font-semibold text-base-300 transition-colors"
                     >
                       Ver Detalhes
                     </button>
@@ -281,7 +282,7 @@ export const OrdersModule: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => advanceOrderStatus(ord.id)}
-                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold shadow-sm active:scale-95 transition-all"
+                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent-600 hover:bg-accent-500 text-on-accent text-xs font-semibold shadow-sm active:scale-95 transition-all"
                           >
                             <span>Avançar</span>
                             <ChevronRight className="w-3.5 h-3.5" />
@@ -294,7 +295,7 @@ export const OrdersModule: React.FC = () => {
                             triggerHaptic();
                             advanceOrderStatus(ord.id, 'entregue', 'Entregue no balcão de atendimento');
                           }}
-                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-sm active:scale-95 transition-all"
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-sm active:scale-95 transition-all"
                         >
                           <CheckCircle2 className="w-3.5 h-3.5" />
                           <span>Entregar</span>
@@ -323,13 +324,13 @@ export const OrdersModule: React.FC = () => {
             return (
               <div
                 key={colStatus}
-                className="w-72 shrink-0 bg-stone-900/80 border border-stone-800 rounded-2xl p-3 flex flex-col max-h-[75vh] snap-center"
+                className="w-72 shrink-0 bg-base-900/80 border border-base-800 rounded-2xl p-3 flex flex-col max-h-[75vh] snap-center"
               >
-                <div className="flex items-center justify-between pb-2 mb-2 border-b border-stone-800">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-amber-300 capitalize">
+                <div className="flex items-center justify-between pb-2 mb-2 border-b border-base-800">
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-accent-300 capitalize">
                     {colStatus.replace('_', ' ')}
                   </h4>
-                  <span className="text-xs font-mono font-bold bg-stone-800 px-2 py-0.5 rounded-full text-stone-300">
+                  <span className="text-xs font-mono font-semibold bg-base-800 px-2 py-0.5 rounded-full text-base-300">
                     {colOrders.length}
                   </span>
                 </div>
@@ -345,27 +346,27 @@ export const OrdersModule: React.FC = () => {
                           triggerHaptic();
                           setActiveOrderId(ord.id);
                         }}
-                        className="p-3 rounded-xl bg-stone-950 border border-stone-800 hover:border-amber-600/80 cursor-pointer space-y-2 transition-all shadow-sm"
+                        className="p-3 rounded-xl bg-base-950 border border-base-800 hover:border-accent-600/80 cursor-pointer space-y-2 transition-all shadow-sm"
                       >
                         <div className="flex justify-between items-start">
-                          <span className="font-mono text-[10px] font-bold text-amber-400">
+                          <span className="font-mono text-[10px] font-semibold text-accent-400">
                             OS #{ord.orderNumber}
                           </span>
-                          <span className="text-[10px] text-stone-400">
+                          <span className="text-[10px] text-base-400">
                             {ord.estimatedDeliveryDate.substring(5)}
                           </span>
                         </div>
-                        <p className="text-xs font-bold text-white truncate">
+                        <p className="text-xs font-semibold text-base-50 truncate">
                           {inst?.brand} {inst?.model}
                         </p>
-                        <p className="text-[11px] text-stone-400 line-clamp-1">
+                        <p className="text-[11px] text-base-400 line-clamp-1">
                           {client?.name} · {ord.reportedIssue}
                         </p>
-                        <div className="flex justify-between items-center pt-1 border-t border-stone-900 text-[10px]">
-                          <span className="text-amber-400 font-semibold font-mono">
+                        <div className="flex justify-between items-center pt-1 border-t border-base-900 text-[10px]">
+                          <span className="text-accent-400 font-semibold font-mono">
                             R$ {ord.totalAmount.toFixed(2)}
                           </span>
-                          <span className="text-stone-500">
+                          <span className="text-base-500">
                             {ord.services.filter((s) => s.done).length}/{ord.services.length} feitos
                           </span>
                         </div>

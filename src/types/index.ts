@@ -1,4 +1,8 @@
-export type UserRole = 'luthier' | 'atendente' | 'cliente';
+/**
+ * Papéis de tela. Com a API real: ADMIN/LUTHIER → 'luthier', ATENDENTE → 'atendente',
+ * ESTOQUISTA → 'estoquista'. 'cliente' é a visão do portal (sem login no backend).
+ */
+export type UserRole = 'luthier' | 'atendente' | 'estoquista' | 'cliente';
 
 export type InstrumentType =
   | 'violao_aco'

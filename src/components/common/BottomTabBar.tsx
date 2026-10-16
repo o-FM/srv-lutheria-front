@@ -1,182 +1,77 @@
 import React from 'react';
+import { Plus } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import {
-  Home,
-  ClipboardList,
-  Plus,
-  Users,
-  Package,
-  Calendar,
-  MoreHorizontal,
-} from 'lucide-react';
+import { navItemsFor } from '../../config/navigation';
+import { getRolePermissions } from '../../utils/permissions';
 
+/** Navegação do celular/tablet (zona do polegar). Escondida em telas grandes. */
 export const BottomTabBar: React.FC = () => {
-  const {
-    activeTab,
-    setActiveTab,
-    orders,
-    stock,
-    setIsNewOrderWizardOpen,
-    triggerHaptic,
-    currentRole,
-  } = useApp();
+  const { activeTab, setActiveTab, orders, stock, setIsNewOrderWizardOpen, triggerHaptic, currentRole } = useApp();
 
-  // Cliente has their own dedicated portal interface without staff tabs
-  if (currentRole === 'cliente') {
-    return null;
-  }
+  if (currentRole === 'cliente') return null;
 
-  const activeOrdersCount = orders.filter(
-    (o) => o.status !== 'entregue' && o.status !== 'cancelado'
-  ).length;
+  const items = navItemsFor(currentRole);
+  const canOpenOrder = getRolePermissions(currentRole).canOpenOrder;
+  const openOrders = orders.filter((o) => o.status !== 'entregue' && o.status !== 'cancelado').length;
+  const lowStock = stock.some((s) => s.currentQuantity <= s.minQuantity);
 
-  const lowStockCount = stock.filter((s) => s.currentQuantity <= s.minQuantity).length;
+  // Botão "Nova OS" no centro: metade das abas de cada lado
+  const middle = Math.ceil(items.length / 2);
+  const tab = (item: (typeof items)[number]) => {
+    const active = activeTab === item.id;
+    const Icon = item.icon;
+    return (
+      <button
+        key={item.id}
+        type="button"
+        onClick={() => {
+          triggerHaptic();
+          setActiveTab(item.id);
+        }}
+        aria-current={active ? 'page' : undefined}
+        className={`flex-1 flex flex-col items-center justify-center gap-0.5 h-full min-w-12 transition-colors ${
+          active ? 'text-accent-400' : 'text-base-500 hover:text-base-300'
+        }`}
+      >
+        <span className="relative">
+          <Icon className="w-5 h-5" />
+          {item.id === 'os' && openOrders > 0 && (
+            <span className="absolute -top-1.5 -right-2.5 min-w-4 h-4 px-1 rounded-full bg-base-700 text-base-100 text-[10px] font-medium flex items-center justify-center">
+              {openOrders}
+            </span>
+          )}
+          {item.id === 'estoque' && lowStock && (
+            <span className="absolute -top-0.5 -right-1 w-2 h-2 rounded-full bg-rose-500" />
+          )}
+        </span>
+        <span className={`text-[11px] ${active ? 'font-medium' : ''}`}>{item.label}</span>
+      </button>
+    );
+  };
 
   return (
     <nav
-      aria-label="Navegação Principal"
-      className="fixed bottom-0 left-0 right-0 z-40 bg-stone-900/95 dark:bg-stone-950/95 backdrop-blur-md border-t border-stone-800 text-stone-400 pb-safe shadow-2xl"
+      aria-label="Navegação principal"
+      className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-base-950/95 backdrop-blur-sm border-t border-base-800 pb-[env(safe-area-inset-bottom)]"
     >
-      <div className="max-w-md mx-auto px-2 flex items-center justify-between h-16 relative">
-        {/* Tab 1: Hoje */}
-        <button
-          type="button"
-          onClick={() => {
-            triggerHaptic();
-            setActiveTab('hoje');
-          }}
-          className={`flex flex-col items-center justify-center flex-1 h-full min-w-[48px] transition-colors relative ${
-            activeTab === 'hoje' ? 'text-amber-400 font-semibold' : 'text-stone-400 hover:text-stone-200'
-          }`}
-        >
-          <Home className="w-5 h-5 mb-0.5" />
-          <span className="text-[11px] leading-tight tracking-tight">Hoje</span>
-          {activeTab === 'hoje' && (
-            <span className="absolute bottom-1 w-6 h-0.5 bg-amber-400 rounded-full" />
-          )}
-        </button>
-
-        {/* Tab 2: OS (Ordens de Serviço) */}
-        <button
-          type="button"
-          onClick={() => {
-            triggerHaptic();
-            setActiveTab('os');
-          }}
-          className={`flex flex-col items-center justify-center flex-1 h-full min-w-[48px] transition-colors relative ${
-            activeTab === 'os' ? 'text-amber-400 font-semibold' : 'text-stone-400 hover:text-stone-200'
-          }`}
-        >
-          <div className="relative">
-            <ClipboardList className="w-5 h-5 mb-0.5" />
-            {activeOrdersCount > 0 && (
-              <span className="absolute -top-1 -right-2 min-w-4 h-4 px-1 rounded-full bg-amber-600 text-white text-[9px] font-bold flex items-center justify-center">
-                {activeOrdersCount}
-              </span>
-            )}
+      <div className="max-w-xl mx-auto flex items-center h-16 px-2">
+        {items.slice(0, middle).map(tab)}
+        {canOpenOrder && (
+          <div className="flex-1 flex justify-center">
+            <button
+              type="button"
+              onClick={() => {
+                triggerHaptic();
+                setIsNewOrderWizardOpen(true);
+              }}
+              className="w-12 h-12 rounded-2xl bg-accent-600 hover:bg-accent-500 text-on-accent flex items-center justify-center transition-colors active:scale-95"
+              aria-label="Nova ordem de serviço"
+            >
+              <Plus className="w-6 h-6" />
+            </button>
           </div>
-          <span className="text-[11px] leading-tight tracking-tight">OS</span>
-          {activeTab === 'os' && (
-            <span className="absolute bottom-1 w-6 h-0.5 bg-amber-400 rounded-full" />
-          )}
-        </button>
-
-        {/* Central FAB: Nova OS (Zone of maximum thumb reach) */}
-        <div className="flex-1 flex justify-center items-center relative -top-3">
-          <button
-            type="button"
-            onClick={() => {
-              triggerHaptic();
-              setIsNewOrderWizardOpen(true);
-            }}
-            className="w-14 h-14 rounded-full bg-gradient-to-tr from-amber-600 via-amber-500 to-amber-400 text-stone-950 flex flex-col items-center justify-center shadow-lg shadow-amber-900/40 hover:scale-105 active:scale-95 transition-all ring-4 ring-stone-900 dark:ring-stone-950 focus:outline-none"
-            title="Abrir Nova Ordem de Serviço em 3 passos"
-            aria-label="Nova Ordem de Serviço"
-          >
-            <Plus className="w-7 h-7 stroke-[2.75]" />
-          </button>
-        </div>
-
-        {/* Tab 3: Clientes */}
-        <button
-          type="button"
-          onClick={() => {
-            triggerHaptic();
-            setActiveTab('clientes');
-          }}
-          className={`flex flex-col items-center justify-center flex-1 h-full min-w-[48px] transition-colors relative ${
-            activeTab === 'clientes' ? 'text-amber-400 font-semibold' : 'text-stone-400 hover:text-stone-200'
-          }`}
-        >
-          <Users className="w-5 h-5 mb-0.5" />
-          <span className="text-[11px] leading-tight tracking-tight">Clientes</span>
-          {activeTab === 'clientes' && (
-            <span className="absolute bottom-1 w-6 h-0.5 bg-amber-400 rounded-full" />
-          )}
-        </button>
-
-        {/* Tab 4: Estoque (Only for Luthier/Admin) OR Agenda (for Atendente) */}
-        {currentRole === 'luthier' ? (
-          <button
-            type="button"
-            onClick={() => {
-              triggerHaptic();
-              setActiveTab('estoque');
-            }}
-            className={`flex flex-col items-center justify-center flex-1 h-full min-w-[48px] transition-colors relative ${
-              activeTab === 'estoque' ? 'text-amber-400 font-semibold' : 'text-stone-400 hover:text-stone-200'
-            }`}
-          >
-            <div className="relative">
-              <Package className="w-5 h-5 mb-0.5" />
-              {lowStockCount > 0 && (
-                <span className="absolute -top-1 -right-2 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-stone-900" />
-              )}
-            </div>
-            <span className="text-[11px] leading-tight tracking-tight">Estoque</span>
-            {activeTab === 'estoque' && (
-              <span className="absolute bottom-1 w-6 h-0.5 bg-amber-400 rounded-full" />
-            )}
-          </button>
-        ) : (
-          /* For Atendente: Agenda de Entregas & Avisos */
-          <button
-            type="button"
-            onClick={() => {
-              triggerHaptic();
-              setActiveTab('mais');
-            }}
-            className={`flex flex-col items-center justify-center flex-1 h-full min-w-[48px] transition-colors relative ${
-              activeTab === 'mais' ? 'text-amber-400 font-semibold' : 'text-stone-400 hover:text-stone-200'
-            }`}
-          >
-            <Calendar className="w-5 h-5 mb-0.5" />
-            <span className="text-[11px] leading-tight tracking-tight">Agenda</span>
-            {activeTab === 'mais' && (
-              <span className="absolute bottom-1 w-6 h-0.5 bg-amber-400 rounded-full" />
-            )}
-          </button>
         )}
-
-        {/* Tab 5: Mais (Only for Luthier/Admin) */}
-        {currentRole === 'luthier' && (
-          <button
-            type="button"
-            onClick={() => {
-              triggerHaptic();
-              setActiveTab('mais');
-            }}
-            className={`flex flex-col items-center justify-center flex-1 h-full min-w-[48px] transition-colors relative ${
-              activeTab === 'mais' ? 'text-amber-400 font-semibold' : 'text-stone-400 hover:text-stone-200'
-            }`}
-          >
-            <MoreHorizontal className="w-5 h-5 mb-0.5" />
-            <span className="text-[11px] leading-tight tracking-tight">Mais</span>
-            {activeTab === 'mais' && (
-              <span className="absolute bottom-1 w-6 h-0.5 bg-amber-400 rounded-full" />
-            )}
-          </button>
-        )}
+        {items.slice(middle).map(tab)}
       </div>
     </nav>
   );

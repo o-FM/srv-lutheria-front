@@ -110,24 +110,24 @@ export const GlobalSearchModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-stone-900/95 backdrop-blur-md text-stone-100 animate-in fade-in">
+    <div className="fixed inset-0 z-50 flex flex-col bg-base-900/95 backdrop-blur-md text-base-100 animate-in fade-in">
       {/* Top Search Bar */}
-      <div className="p-3 border-b border-stone-800 bg-stone-950 flex items-center gap-2">
-        <div className="flex-1 flex items-center gap-2 px-3 py-2 bg-stone-900 border border-stone-700 rounded-xl focus-within:border-amber-500">
-          <Search className="w-4 h-4 text-amber-500 shrink-0" />
+      <div className="p-3 border-b border-base-800 bg-base-950 flex items-center gap-2">
+        <div className="flex-1 flex items-center gap-2 px-3 py-2 bg-base-900 border border-base-700 rounded-xl focus-within:border-accent-500">
+          <Search className="w-4 h-4 text-accent-500 shrink-0" />
           <input
             type="text"
             autoFocus
             value={term}
             onChange={(e) => setTerm(e.target.value)}
             placeholder="Buscar por cliente, OS, instrumento ou peça..."
-            className="w-full bg-transparent text-sm text-stone-100 placeholder-stone-500 focus:outline-none"
+            className="w-full bg-transparent text-sm text-base-100 placeholder-base-500 focus:outline-none"
           />
           {term && (
             <button
               type="button"
               onClick={() => setTerm('')}
-              className="p-0.5 text-stone-400 hover:text-white"
+              className="p-0.5 text-base-400 hover:text-base-50"
             >
               <X className="w-4 h-4" />
             </button>
@@ -136,7 +136,7 @@ export const GlobalSearchModal: React.FC = () => {
         <button
           type="button"
           onClick={() => setIsSearchOpen(false)}
-          className="px-3 py-2 text-xs font-semibold text-stone-300 hover:text-white"
+          className="px-3 py-2 text-xs font-semibold text-base-300 hover:text-base-50"
         >
           Cancelar
         </button>
@@ -147,7 +147,7 @@ export const GlobalSearchModal: React.FC = () => {
         {!term ? (
           /* Recent searches */
           <div className="space-y-3">
-            <div className="flex items-center justify-between text-xs text-stone-400 font-semibold uppercase tracking-wider">
+            <div className="flex items-center justify-between text-xs text-base-400 font-semibold uppercase tracking-wider">
               <span className="flex items-center gap-1.5">
                 <History className="w-3.5 h-3.5" />
                 Buscas Recentes
@@ -156,7 +156,7 @@ export const GlobalSearchModal: React.FC = () => {
                 <button
                   type="button"
                   onClick={clearRecentSearches}
-                  className="text-stone-500 hover:text-stone-300 normal-case"
+                  className="text-base-500 hover:text-base-300 normal-case"
                 >
                   Limpar
                 </button>
@@ -169,22 +169,22 @@ export const GlobalSearchModal: React.FC = () => {
                   key={idx}
                   type="button"
                   onClick={() => setTerm(item)}
-                  className="px-3 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-300 text-xs border border-stone-700/60 transition-colors"
+                  className="px-3 py-1.5 rounded-lg bg-base-800 hover:bg-base-700 text-base-300 text-xs border border-base-700/60 transition-colors"
                 >
                   {item}
                 </button>
               ))}
             </div>
 
-            <div className="mt-8 p-4 rounded-xl bg-stone-800/40 border border-stone-800 text-xs text-stone-400 space-y-1">
-              <p className="font-semibold text-stone-300">Dicas de busca rápida:</p>
+            <div className="mt-8 p-4 rounded-xl bg-base-800/40 border border-base-800 text-xs text-base-400 space-y-1">
+              <p className="font-semibold text-base-300">Dicas de busca rápida:</p>
               <p>• Digite o número da OS para ir direto ao instrumento (ex: "1042")</p>
               <p>• Digite "cavalete" ou "traste" para ver serviços e peças</p>
               <p>• Digite o nome do músico para ver histórico completo</p>
             </div>
           </div>
         ) : searchResults?.totalCount === 0 ? (
-          <div className="text-center py-12 text-stone-400">
+          <div className="text-center py-12 text-base-400">
             <p className="text-sm font-semibold">Nenhum resultado encontrado para "{term}"</p>
             <p className="text-xs mt-1">Verifique se digitou o nome ou número correto.</p>
           </div>
@@ -194,7 +194,7 @@ export const GlobalSearchModal: React.FC = () => {
             {/* Orders */}
             {searchResults && searchResults.orders.length > 0 && (
               <div className="space-y-2">
-                <span className="text-[11px] font-bold text-amber-500 uppercase tracking-wider flex items-center gap-1.5">
+                <span className="text-[11px] font-semibold text-accent-500 uppercase tracking-wider flex items-center gap-1.5">
                   <ClipboardList className="w-3.5 h-3.5" />
                   Ordens de Serviço ({searchResults.orders.length})
                 </span>
@@ -207,22 +207,22 @@ export const GlobalSearchModal: React.FC = () => {
                         key={order.id}
                         type="button"
                         onClick={() => handleSelectOrder(order.id)}
-                        className="w-full flex items-center justify-between p-3 rounded-xl bg-stone-800/80 hover:bg-stone-800 border border-stone-700/60 text-left transition-colors group"
+                        className="w-full flex items-center justify-between p-3 rounded-xl bg-base-800/80 hover:bg-base-800 border border-base-700/60 text-left transition-colors group"
                       >
                         <div className="min-w-0 pr-2">
                           <div className="flex items-center gap-2">
-                            <span className="font-bold text-xs text-white">
+                            <span className="font-semibold text-xs text-base-50">
                               OS #{order.orderNumber}
                             </span>
-                            <span className="text-xs text-amber-300 font-semibold truncate">
+                            <span className="text-xs text-accent-300 font-semibold truncate">
                               {inst?.brand} {inst?.model}
                             </span>
                           </div>
-                          <p className="text-xs text-stone-400 truncate mt-0.5">
+                          <p className="text-xs text-base-400 truncate mt-0.5">
                             {client?.name} · {order.reportedIssue}
                           </p>
                         </div>
-                        <ArrowRight className="w-4 h-4 text-stone-500 group-hover:text-amber-400 transition-colors shrink-0" />
+                        <ArrowRight className="w-4 h-4 text-base-500 group-hover:text-accent-400 transition-colors shrink-0" />
                       </button>
                     );
                   })}
@@ -233,7 +233,7 @@ export const GlobalSearchModal: React.FC = () => {
             {/* Clients */}
             {searchResults && searchResults.clients.length > 0 && (
               <div className="space-y-2">
-                <span className="text-[11px] font-bold text-amber-500 uppercase tracking-wider flex items-center gap-1.5">
+                <span className="text-[11px] font-semibold text-accent-500 uppercase tracking-wider flex items-center gap-1.5">
                   <Users className="w-3.5 h-3.5" />
                   Clientes ({searchResults.clients.length})
                 </span>
@@ -243,13 +243,13 @@ export const GlobalSearchModal: React.FC = () => {
                       key={c.id}
                       type="button"
                       onClick={() => handleSelectClient(c.id)}
-                      className="w-full flex items-center justify-between p-3 rounded-xl bg-stone-800/80 hover:bg-stone-800 border border-stone-700/60 text-left transition-colors group"
+                      className="w-full flex items-center justify-between p-3 rounded-xl bg-base-800/80 hover:bg-base-800 border border-base-700/60 text-left transition-colors group"
                     >
                       <div>
-                        <p className="text-xs font-bold text-white">{c.name}</p>
-                        <p className="text-[11px] text-stone-400 mt-0.5">{c.phone} · {c.address}</p>
+                        <p className="text-xs font-semibold text-base-50">{c.name}</p>
+                        <p className="text-[11px] text-base-400 mt-0.5">{c.phone} · {c.address}</p>
                       </div>
-                      <ArrowRight className="w-4 h-4 text-stone-500 group-hover:text-amber-400 shrink-0" />
+                      <ArrowRight className="w-4 h-4 text-base-500 group-hover:text-accent-400 shrink-0" />
                     </button>
                   ))}
                 </div>
@@ -259,7 +259,7 @@ export const GlobalSearchModal: React.FC = () => {
             {/* Stock */}
             {searchResults && searchResults.stock.length > 0 && (
               <div className="space-y-2">
-                <span className="text-[11px] font-bold text-amber-500 uppercase tracking-wider flex items-center gap-1.5">
+                <span className="text-[11px] font-semibold text-accent-500 uppercase tracking-wider flex items-center gap-1.5">
                   <Package className="w-3.5 h-3.5" />
                   Estoque ({searchResults.stock.length})
                 </span>
@@ -269,15 +269,15 @@ export const GlobalSearchModal: React.FC = () => {
                       key={s.id}
                       type="button"
                       onClick={handleSelectStock}
-                      className="w-full flex items-center justify-between p-3 rounded-xl bg-stone-800/80 hover:bg-stone-800 border border-stone-700/60 text-left transition-colors group"
+                      className="w-full flex items-center justify-between p-3 rounded-xl bg-base-800/80 hover:bg-base-800 border border-base-700/60 text-left transition-colors group"
                     >
                       <div>
-                        <p className="text-xs font-bold text-white">{s.name}</p>
-                        <p className="text-[11px] text-stone-400 mt-0.5">
+                        <p className="text-xs font-semibold text-base-50">{s.name}</p>
+                        <p className="text-[11px] text-base-400 mt-0.5">
                           {s.currentQuantity} {s.unit} disponíveis · R$ {s.salePrice.toFixed(2)}
                         </p>
                       </div>
-                      <ArrowRight className="w-4 h-4 text-stone-500 group-hover:text-amber-400 shrink-0" />
+                      <ArrowRight className="w-4 h-4 text-base-500 group-hover:text-accent-400 shrink-0" />
                     </button>
                   ))}
                 </div>

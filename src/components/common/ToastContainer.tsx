@@ -12,7 +12,7 @@ export const ToastContainer: React.FC = () => {
       {toasts.map((toast) => {
         const icons = {
           success: <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />,
-          warning: <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />,
+          warning: <AlertTriangle className="w-5 h-5 text-accent-500 shrink-0" />,
           error: <XCircle className="w-5 h-5 text-rose-500 shrink-0" />,
           info: <Info className="w-5 h-5 text-blue-500 shrink-0" />,
         };
@@ -24,16 +24,16 @@ export const ToastContainer: React.FC = () => {
             key={toast.id}
             role="status"
             aria-live="polite"
-            className="pointer-events-auto flex w-full items-center justify-between gap-3 rounded-xl bg-stone-900/95 dark:bg-stone-900/95 text-stone-100 p-3.5 shadow-xl backdrop-blur-md border border-stone-700/60 transition-all duration-200 animate-in fade-in slide-in-from-bottom-3"
+            className="pointer-events-auto flex w-full items-center justify-between gap-3 rounded-xl bg-base-900/95 dark:bg-base-900/95 text-base-100 p-3.5 backdrop-blur-md border border-base-700/60 transition-all duration-200 animate-in fade-in slide-in-from-bottom-3"
           >
             <div className="flex items-center gap-3 min-w-0">
               {icon}
               <div className="min-w-0 text-left">
-                <p className="text-sm font-semibold truncate leading-tight text-white">
+                <p className="text-sm font-semibold truncate leading-tight text-base-50">
                   {toast.title}
                 </p>
                 {toast.description && (
-                  <p className="text-xs text-stone-300 truncate mt-0.5 leading-snug">
+                  <p className="text-xs text-base-300 truncate mt-0.5 leading-snug">
                     {toast.description}
                   </p>
                 )}
@@ -49,7 +49,7 @@ export const ToastContainer: React.FC = () => {
                     toast.undoAction?.();
                     dismissToast(toast.id);
                   }}
-                  className="px-2.5 py-1 text-xs font-bold text-amber-400 hover:text-amber-300 bg-amber-950/70 hover:bg-amber-900/80 rounded-md border border-amber-600/50 transition-colors uppercase tracking-wider"
+                  className="px-2.5 py-1 text-xs font-semibold text-accent-400 hover:text-accent-300 bg-accent-950/70 hover:bg-accent-900/80 rounded-md border border-accent-600/50 transition-colors uppercase tracking-wider"
                 >
                   {toast.undoLabel || 'Desfazer'}
                 </button>
@@ -57,7 +57,7 @@ export const ToastContainer: React.FC = () => {
               <button
                 type="button"
                 onClick={() => dismissToast(toast.id)}
-                className="p-1 text-stone-400 hover:text-white rounded-lg transition-colors"
+                className="p-1 text-base-400 hover:text-base-50 rounded-lg transition-colors"
                 aria-label="Fechar notificação"
               >
                 <X className="w-4 h-4" />

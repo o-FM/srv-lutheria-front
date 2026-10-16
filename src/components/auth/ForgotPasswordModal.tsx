@@ -48,12 +48,12 @@ export const ForgotPasswordModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in select-none">
-      <div className="w-full max-w-sm bg-stone-900 border border-stone-800 rounded-2xl overflow-hidden shadow-2xl text-stone-100">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-stone-800 bg-stone-950/70">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 animate-in fade-in select-none">
+      <div className="w-full max-w-sm bg-base-900 border border-base-800 rounded-2xl overflow-hidden shadow-lg text-base-100">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-base-800 bg-base-950/70">
           <div className="flex items-center gap-2">
-            <KeyRound className="w-4 h-4 text-amber-500" />
-            <span className="font-bold text-sm">Recuperação de Senha</span>
+            <KeyRound className="w-4 h-4 text-accent-500" />
+            <span className="font-semibold text-sm">Recuperação de Senha</span>
           </div>
           <button
             type="button"
@@ -61,7 +61,7 @@ export const ForgotPasswordModal: React.FC = () => {
               setIsForgotPasswordOpen(false);
               setSuccessMsg(null);
             }}
-            className="p-1 text-stone-400 hover:text-white"
+            className="p-1 text-base-400 hover:text-base-50"
           >
             <X className="w-5 h-5" />
           </button>
@@ -73,21 +73,21 @@ export const ForgotPasswordModal: React.FC = () => {
               <div className="w-12 h-12 rounded-full bg-emerald-950 border border-emerald-800 text-emerald-400 flex items-center justify-center mx-auto">
                 <CheckCircle2 className="w-6 h-6" />
               </div>
-              <p className="text-xs text-stone-200 leading-relaxed">{successMsg}</p>
+              <p className="text-xs text-base-200 leading-relaxed">{successMsg}</p>
               <button
                 type="button"
                 onClick={() => {
                   setIsForgotPasswordOpen(false);
                   setSuccessMsg(null);
                 }}
-                className="w-full py-2.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-xs font-semibold text-white mt-2"
+                className="w-full py-2.5 rounded-xl bg-base-800 hover:bg-base-700 text-xs font-semibold text-base-50 mt-2"
               >
                 Voltar para o Login
               </button>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-3">
-              <p className="text-xs text-stone-300">
+              <p className="text-xs text-base-300">
                 Digite seu e-mail ou CPF cadastrado. Enviaremos um link de uso único com expiração em 15 minutos.
               </p>
 
@@ -99,7 +99,7 @@ export const ForgotPasswordModal: React.FC = () => {
               )}
 
               <div>
-                <label className="text-[11px] uppercase font-bold text-stone-400 block mb-1">
+                <label className="text-[11px] uppercase font-semibold text-base-400 block mb-1">
                   E-mail ou CPF
                 </label>
                 <input
@@ -108,7 +108,7 @@ export const ForgotPasswordModal: React.FC = () => {
                   value={identifier}
                   onChange={handleIdentifierChange}
                   placeholder="seu.email@exemplo.com ou 000.000.000-00"
-                  className="w-full px-3 py-2.5 bg-stone-950 border border-stone-800 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500"
+                  className="w-full px-3 py-2.5 bg-base-950 border border-base-800 rounded-xl text-xs text-base-50 focus:outline-none focus:border-accent-500"
                 />
               </div>
 
@@ -116,14 +116,14 @@ export const ForgotPasswordModal: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsForgotPasswordOpen(false)}
-                  className="flex-1 py-2.5 rounded-xl bg-stone-800 text-xs font-semibold text-stone-300"
+                  className="flex-1 py-2.5 rounded-xl bg-base-800 text-xs font-semibold text-base-300"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="flex-1 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold"
+                  className="flex-1 py-2.5 rounded-xl bg-accent-600 hover:bg-accent-500 text-on-accent text-xs font-semibold"
                 >
                   {isLoading ? 'Enviando...' : 'Enviar Link'}
                 </button>

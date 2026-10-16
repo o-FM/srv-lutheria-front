@@ -84,21 +84,30 @@ export const ClientsModule: React.FC = () => {
     setCpf(formatted);
   };
 
-  const handleCreateClient = (e: React.FormEvent) => {
+  const handleCreateClient = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
       showToast({ title: 'Informe o nome do cliente', type: 'warning' });
       return;
     }
+    if (phone.replace(/\D/g, '').length < 10) {
+      showToast({ title: 'Informe o telefone com DDD', type: 'warning' });
+      return;
+    }
     triggerHaptic();
-    const created = createClient({
-      name: name.trim(),
-      phone: phone.trim() || '(11) 99999-9999',
-      email: email.trim() || `${name.toLowerCase().replace(/\s+/g, '')}@gmail.com`,
-      cpf: cpf.trim(),
-      address: address.trim(),
-      notes: notes.trim(),
-    });
+    let created;
+    try {
+      created = await createClient({
+        name: name.trim(),
+        phone: phone.trim(),
+        email: email.trim(),
+        cpf: cpf.trim(),
+        address: address.trim(),
+        notes: notes.trim(),
+      });
+    } catch {
+      return; // erro já exibido pelo contexto
+    }
     setName('');
     setPhone('');
     setEmail('');
@@ -109,14 +118,15 @@ export const ClientsModule: React.FC = () => {
     setSelectedClientId(created.id);
   };
 
-  const handleCreateInstrument = (e: React.FormEvent) => {
+  const handleCreateInstrument = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedClientId || !instBrand.trim() || !instModel.trim()) {
       showToast({ title: 'Informe a marca e modelo', type: 'warning' });
       return;
     }
     triggerHaptic();
-    createInstrument({
+    try {
+      await createInstrument({
       clientId: selectedClientId,
       type: instType,
       brand: instBrand.trim(),
@@ -125,7 +135,10 @@ export const ClientsModule: React.FC = () => {
       stringsGauge: instGauge.trim(),
       tuningPreference: 'Padrão E (440Hz)',
       conditionNotes: instNotes.trim(),
-    });
+      });
+    } catch {
+      return;
+    }
     setInstBrand('');
     setInstModel('');
     setInstSerial('');
@@ -134,23 +147,23 @@ export const ClientsModule: React.FC = () => {
   };
 
   return (
-    <div className="space-y-4 pb-24 max-w-4xl mx-auto">
+    <div className="space-y-5">
       {/* Header with Search and New Client */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
         <div className="flex-1 relative">
-          <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-base-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por nome, telefone ou CPF..."
-            className="w-full pl-9 pr-3 py-2.5 bg-stone-900 border border-stone-800 rounded-xl text-xs text-white placeholder-stone-500 focus:outline-none focus:border-amber-500"
+            className="w-full pl-9 pr-3 py-2.5 bg-base-900 border border-base-800 rounded-xl text-xs text-base-50 placeholder-base-500 focus:outline-none focus:border-accent-500"
           />
         </div>
         <button
           type="button"
           onClick={() => setIsNewClientOpen(true)}
-          className="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded-xl shadow-md active:scale-95 transition-all"
+          className="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-accent-600 hover:bg-accent-500 text-on-accent text-xs font-semibold rounded-xl active:scale-95 transition-all"
         >
           <Plus className="w-4 h-4" />
           Novo Cliente
@@ -161,7 +174,7 @@ export const ClientsModule: React.FC = () => {
       {!selectedClientId ? (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-stone-400 uppercase tracking-wider">
+            <span className="text-[11px] font-semibold text-base-400 uppercase tracking-wider">
               Clientes Cadastrados ({filteredClients.length})
             </span>
           </div>
@@ -174,7 +187,7 @@ export const ClientsModule: React.FC = () => {
               return (
                 <div
                   key={client.id}
-                  className="p-3.5 rounded-2xl bg-stone-900 border border-stone-800 hover:border-stone-700 transition-all shadow-md flex items-center justify-between gap-3"
+                  className="p-3.5 rounded-2xl bg-base-900 border border-base-800 hover:border-base-700 transition-all flex items-center justify-between gap-3"
                 >
                   <div
                     onClick={() => {
@@ -183,7 +196,7 @@ export const ClientsModule: React.FC = () => {
                     }}
                     className="flex items-center gap-3 min-w-0 cursor-pointer flex-1"
                   >
-                    <div className="w-11 h-11 rounded-full bg-stone-950 border border-stone-800 overflow-hidden flex items-center justify-center shrink-0 text-amber-500 font-bold">
+                    <div className="w-11 h-11 rounded-full bg-base-950 border border-base-800 overflow-hidden flex items-center justify-center shrink-0 text-accent-500 font-semibold">
                       {client.avatarUrl ? (
                         <img
                           src={client.avatarUrl}
@@ -196,11 +209,11 @@ export const ClientsModule: React.FC = () => {
                     </div>
 
                     <div className="min-w-0">
-                      <h3 className="font-bold text-xs text-white truncate">{client.name}</h3>
-                      <p className="text-[11px] text-stone-400 truncate mt-0.5">
+                      <h3 className="font-semibold text-xs text-base-50 truncate">{client.name}</h3>
+                      <p className="text-[11px] text-base-400 truncate mt-0.5">
                         {client.phone} · {client.address || 'São Paulo'}
                       </p>
-                      <p className="text-[10px] text-amber-400/90 font-medium mt-0.5">
+                      <p className="text-[10px] text-accent-400/90 font-medium mt-0.5">
                         {insts.length} instrumento(s) · {osCount} OS no histórico
                       </p>
                     </div>
@@ -225,7 +238,7 @@ export const ClientsModule: React.FC = () => {
                         const clean = client.phone.replace(/\D/g, '');
                         window.location.href = `tel:${clean}`;
                       }}
-                      className="p-2 rounded-xl bg-stone-800 text-stone-300 hover:bg-stone-700 active:scale-95"
+                      className="p-2 rounded-xl bg-base-800 text-base-300 hover:bg-base-700 active:scale-95"
                       title="Ligar com 1 toque"
                     >
                       <Phone className="w-4 h-4" />
@@ -236,7 +249,7 @@ export const ClientsModule: React.FC = () => {
                         triggerHaptic();
                         setSelectedClientId(client.id);
                       }}
-                      className="p-2 rounded-xl text-stone-400 hover:text-white"
+                      className="p-2 rounded-xl text-base-400 hover:text-base-50"
                     >
                       <ChevronRight className="w-4 h-4" />
                     </button>
@@ -255,7 +268,7 @@ export const ClientsModule: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setSelectedClientId(null)}
-                className="text-xs font-semibold text-amber-400 hover:text-amber-300 flex items-center gap-1"
+                className="text-xs font-semibold text-accent-400 hover:text-accent-300 flex items-center gap-1"
               >
                 ← Voltar para lista de clientes
               </button>
@@ -277,7 +290,7 @@ export const ClientsModule: React.FC = () => {
                     const clean = selectedClient.phone.replace(/\D/g, '');
                     window.location.href = `tel:${clean}`;
                   }}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-stone-800 text-stone-200 text-xs font-semibold"
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-base-800 text-base-200 text-xs font-semibold"
                 >
                   <Phone className="w-3.5 h-3.5" />
                   Ligar
@@ -286,10 +299,10 @@ export const ClientsModule: React.FC = () => {
             </div>
 
             {/* Profile Card */}
-            <div className="p-4 rounded-3xl bg-stone-900 border border-stone-800 shadow-xl space-y-3">
+            <div className="p-4 rounded-2xl bg-base-900 border border-base-800 space-y-3">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-14 h-14 rounded-full bg-stone-950 border border-stone-800 overflow-hidden flex items-center justify-center text-amber-500 font-bold text-xl">
+                  <div className="w-14 h-14 rounded-full bg-base-950 border border-base-800 overflow-hidden flex items-center justify-center text-accent-500 font-semibold text-xl">
                     {selectedClient.avatarUrl ? (
                       <img
                         src={selectedClient.avatarUrl}
@@ -301,10 +314,10 @@ export const ClientsModule: React.FC = () => {
                     )}
                   </div>
                   <div>
-                    <h2 className="text-base font-black text-white">{selectedClient.name}</h2>
-                    <p className="text-xs text-stone-400">{selectedClient.email}</p>
+                    <h2 className="text-base font-semibold text-base-50">{selectedClient.name}</h2>
+                    <p className="text-xs text-base-400">{selectedClient.email}</p>
                     {selectedClient.cpf && (
-                      <p className="text-[11px] text-stone-500 font-mono mt-0.5">
+                      <p className="text-[11px] text-base-500 font-mono mt-0.5">
                         CPF: {selectedClient.cpf}
                       </p>
                     )}
@@ -313,8 +326,8 @@ export const ClientsModule: React.FC = () => {
               </div>
 
               {selectedClient.notes && (
-                <div className="p-2.5 rounded-xl bg-stone-950/70 border border-stone-800 text-xs text-stone-300">
-                  <span className="text-[10px] uppercase font-bold text-amber-400 block mb-0.5">
+                <div className="p-2.5 rounded-xl bg-base-950/70 border border-base-800 text-xs text-base-300">
+                  <span className="text-[10px] uppercase font-semibold text-accent-400 block mb-0.5">
                     Preferências do Músico:
                   </span>
                   {selectedClient.notes}
@@ -325,13 +338,13 @@ export const ClientsModule: React.FC = () => {
             {/* Client Instruments Section */}
             <div className="space-y-2.5">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-stone-400">
+                <span className="text-xs font-semibold uppercase tracking-wider text-base-400">
                   Instrumentos Registrados ({clientInstruments.length})
                 </span>
                 <button
                   type="button"
                   onClick={() => setIsNewInstOpen(true)}
-                  className="text-xs text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1"
+                  className="text-xs text-accent-400 hover:text-accent-300 font-semibold flex items-center gap-1"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   Adicionar Instrumento
@@ -341,30 +354,30 @@ export const ClientsModule: React.FC = () => {
               {clientInstruments.map((inst) => (
                 <div
                   key={inst.id}
-                  className="p-3.5 rounded-2xl bg-stone-900 border border-stone-800 space-y-2"
+                  className="p-3.5 rounded-2xl bg-base-900 border border-base-800 space-y-2"
                 >
                   <div className="flex justify-between items-start">
                     <div>
-                      <h4 className="font-bold text-xs text-white">
+                      <h4 className="font-semibold text-xs text-base-50">
                         {inst.brand} {inst.model}
                       </h4>
-                      <p className="text-[11px] text-stone-400 capitalize">
+                      <p className="text-[11px] text-base-400 capitalize">
                         {inst.type.replace('_', ' ')} · {inst.year || 'Ano N/I'} · {inst.finishColor || 'Acabamento Original'}
                       </p>
                     </div>
                     {inst.serialNumber && (
-                      <span className="font-mono text-[10px] text-amber-400 bg-stone-950 px-2 py-0.5 rounded border border-stone-800">
+                      <span className="font-mono text-[10px] text-accent-400 bg-base-950 px-2 py-0.5 rounded border border-base-800">
                         S/N: {inst.serialNumber}
                       </span>
                     )}
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 text-[11px] text-stone-300 pt-1 border-t border-stone-800">
+                  <div className="grid grid-cols-2 gap-2 text-[11px] text-base-300 pt-1 border-t border-base-800">
                     <div>
-                      <span className="text-stone-500">Calibre:</span> {inst.stringsGauge || 'Padrão'}
+                      <span className="text-base-500">Calibre:</span> {inst.stringsGauge || 'Padrão'}
                     </div>
                     <div>
-                      <span className="text-stone-500">Afinação:</span> {inst.tuningPreference || 'E Standard'}
+                      <span className="text-base-500">Afinação:</span> {inst.tuningPreference || 'E Standard'}
                     </div>
                   </div>
                 </div>
@@ -374,7 +387,7 @@ export const ClientsModule: React.FC = () => {
             {/* Client OS History Section */}
             <div className="space-y-2.5">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-stone-400">
+                <span className="text-xs font-semibold uppercase tracking-wider text-base-400">
                   Histórico de Serviços ({clientOrders.length})
                 </span>
                 <button
@@ -383,7 +396,7 @@ export const ClientsModule: React.FC = () => {
                     triggerHaptic();
                     setIsNewOrderWizardOpen(true);
                   }}
-                  className="text-xs text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1"
+                  className="text-xs text-accent-400 hover:text-accent-300 font-semibold flex items-center gap-1"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   Abrir Nova OS
@@ -397,22 +410,22 @@ export const ClientsModule: React.FC = () => {
                     triggerHaptic();
                     setActiveOrderId(ord.id);
                   }}
-                  className="p-3 rounded-xl bg-stone-900 border border-stone-800 hover:border-amber-600/60 cursor-pointer flex items-center justify-between"
+                  className="p-3 rounded-xl bg-base-900 border border-base-800 hover:border-accent-600/60 cursor-pointer flex items-center justify-between"
                 >
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs font-bold text-amber-400">
+                      <span className="font-mono text-xs font-semibold text-accent-400">
                         OS #{ord.orderNumber}
                       </span>
-                      <span className="text-xs text-white font-semibold">
+                      <span className="text-xs text-base-50 font-semibold">
                         {ord.reportedIssue}
                       </span>
                     </div>
-                    <p className="text-[11px] text-stone-400 mt-0.5">
+                    <p className="text-[11px] text-base-400 mt-0.5">
                       Entrada: {ord.entryDate} · Total: R$ {ord.totalAmount.toFixed(2)}
                     </p>
                   </div>
-                  <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-lg bg-stone-800 text-stone-300">
+                  <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded-lg bg-base-800 text-base-300">
                     {ord.status.replace('_', ' ')}
                   </span>
                 </div>
@@ -424,24 +437,24 @@ export const ClientsModule: React.FC = () => {
 
       {/* New Client Modal */}
       {isNewClientOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 animate-in fade-in">
           <form
             onSubmit={handleCreateClient}
-            className="w-full max-w-md bg-stone-900 border border-stone-800 rounded-2xl p-4 shadow-2xl space-y-3 text-stone-100"
+            className="w-full max-w-md max-h-[90dvh] overflow-y-auto bg-base-900 border border-base-800 rounded-2xl p-4 shadow-lg space-y-3 text-base-100"
           >
-            <div className="flex items-center justify-between pb-2 border-b border-stone-800">
-              <span className="font-bold text-sm text-white">Cadastrar Novo Cliente</span>
+            <div className="flex items-center justify-between pb-2 border-b border-base-800">
+              <span className="font-semibold text-sm text-base-50">Cadastrar Novo Cliente</span>
               <button
                 type="button"
                 onClick={() => setIsNewClientOpen(false)}
-                className="p-1 text-stone-400 hover:text-white"
+                className="p-1 text-base-400 hover:text-base-50"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div>
-              <label className="text-[11px] uppercase font-bold text-stone-400 block mb-1">
+              <label className="text-[11px] uppercase font-semibold text-base-400 block mb-1">
                 Nome Completo *
               </label>
               <input
@@ -451,13 +464,13 @@ export const ClientsModule: React.FC = () => {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Ex: Carlos Eduardo ou Conservatório Villa-Lobos"
-                className="w-full px-3 py-2 bg-stone-950 border border-stone-700 rounded-xl text-xs text-white"
+                className="w-full px-3 py-2 bg-base-950 border border-base-700 rounded-xl text-xs text-base-50"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="text-[11px] uppercase font-bold text-stone-400 block mb-1">
+                <label className="text-[11px] uppercase font-semibold text-base-400 block mb-1">
                   Celular / WhatsApp *
                 </label>
                 <input
@@ -466,11 +479,11 @@ export const ClientsModule: React.FC = () => {
                   value={phone}
                   onChange={(e) => handlePhoneFormat(e.target.value)}
                   placeholder="(11) 98765-4321"
-                  className="w-full px-3 py-2 bg-stone-950 border border-stone-700 rounded-xl text-xs text-white"
+                  className="w-full px-3 py-2 bg-base-950 border border-base-700 rounded-xl text-xs text-base-50"
                 />
               </div>
               <div>
-                <label className="text-[11px] uppercase font-bold text-stone-400 block mb-1">
+                <label className="text-[11px] uppercase font-semibold text-base-400 block mb-1">
                   CPF
                 </label>
                 <input
@@ -478,13 +491,13 @@ export const ClientsModule: React.FC = () => {
                   value={cpf}
                   onChange={(e) => handleCpfFormat(e.target.value)}
                   placeholder="000.000.000-00"
-                  className="w-full px-3 py-2 bg-stone-950 border border-stone-700 rounded-xl text-xs text-white"
+                  className="w-full px-3 py-2 bg-base-950 border border-base-700 rounded-xl text-xs text-base-50"
                 />
               </div>
             </div>
 
             <div>
-              <label className="text-[11px] uppercase font-bold text-stone-400 block mb-1">
+              <label className="text-[11px] uppercase font-semibold text-base-400 block mb-1">
                 E-mail
               </label>
               <input
@@ -492,12 +505,12 @@ export const ClientsModule: React.FC = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="email@dominio.com"
-                className="w-full px-3 py-2 bg-stone-950 border border-stone-700 rounded-xl text-xs text-white"
+                className="w-full px-3 py-2 bg-base-950 border border-base-700 rounded-xl text-xs text-base-50"
               />
             </div>
 
             <div>
-              <label className="text-[11px] uppercase font-bold text-stone-400 block mb-1">
+              <label className="text-[11px] uppercase font-semibold text-base-400 block mb-1">
                 Bairro / Cidade
               </label>
               <input
@@ -505,12 +518,12 @@ export const ClientsModule: React.FC = () => {
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
                 placeholder="Ex: Pinheiros, São Paulo - SP"
-                className="w-full px-3 py-2 bg-stone-950 border border-stone-700 rounded-xl text-xs text-white"
+                className="w-full px-3 py-2 bg-base-950 border border-base-700 rounded-xl text-xs text-base-50"
               />
             </div>
 
             <div>
-              <label className="text-[11px] uppercase font-bold text-stone-400 block mb-1">
+              <label className="text-[11px] uppercase font-semibold text-base-400 block mb-1">
                 Observações de Músico
               </label>
               <textarea
@@ -518,21 +531,21 @@ export const ClientsModule: React.FC = () => {
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Ex: Toca violino em orquestra; afinação barroca..."
-                className="w-full px-3 py-2 bg-stone-950 border border-stone-700 rounded-xl text-xs text-white"
+                className="w-full px-3 py-2 bg-base-950 border border-base-700 rounded-xl text-xs text-base-50"
               />
             </div>
 
-            <div className="flex gap-2 pt-2 border-t border-stone-800">
+            <div className="flex gap-2 pt-2 border-t border-base-800">
               <button
                 type="button"
                 onClick={() => setIsNewClientOpen(false)}
-                className="flex-1 py-2.5 rounded-xl bg-stone-800 text-xs font-semibold text-stone-300"
+                className="flex-1 py-2.5 rounded-xl bg-base-800 text-xs font-semibold text-base-300"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                className="flex-1 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold"
+                className="flex-1 py-2.5 rounded-xl bg-accent-600 hover:bg-accent-500 text-on-accent text-xs font-semibold"
               >
                 Salvar Cliente
               </button>
@@ -543,30 +556,30 @@ export const ClientsModule: React.FC = () => {
 
       {/* New Instrument Modal */}
       {isNewInstOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 animate-in fade-in">
           <form
             onSubmit={handleCreateInstrument}
-            className="w-full max-w-md bg-stone-900 border border-stone-800 rounded-2xl p-4 shadow-2xl space-y-3 text-stone-100"
+            className="w-full max-w-md max-h-[90dvh] overflow-y-auto bg-base-900 border border-base-800 rounded-2xl p-4 shadow-lg space-y-3 text-base-100"
           >
-            <div className="flex items-center justify-between pb-2 border-b border-stone-800">
-              <span className="font-bold text-sm text-white">Cadastrar Instrumento</span>
+            <div className="flex items-center justify-between pb-2 border-b border-base-800">
+              <span className="font-semibold text-sm text-base-50">Cadastrar Instrumento</span>
               <button
                 type="button"
                 onClick={() => setIsNewInstOpen(false)}
-                className="p-1 text-stone-400 hover:text-white"
+                className="p-1 text-base-400 hover:text-base-50"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div>
-              <label className="text-[11px] uppercase font-bold text-stone-400 block mb-1">
+              <label className="text-[11px] uppercase font-semibold text-base-400 block mb-1">
                 Tipo
               </label>
               <select
                 value={instType}
                 onChange={(e) => setInstType(e.target.value as any)}
-                className="w-full px-3 py-2 bg-stone-950 border border-stone-700 rounded-xl text-xs text-white"
+                className="w-full px-3 py-2 bg-base-950 border border-base-700 rounded-xl text-xs text-base-50"
               >
                 <option value="guitarra">Guitarra</option>
                 <option value="violao_aco">Violão de Aço</option>
@@ -581,7 +594,7 @@ export const ClientsModule: React.FC = () => {
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="text-[11px] uppercase font-bold text-stone-400 block mb-1">
+                <label className="text-[11px] uppercase font-semibold text-base-400 block mb-1">
                   Marca *
                 </label>
                 <input
@@ -590,11 +603,11 @@ export const ClientsModule: React.FC = () => {
                   value={instBrand}
                   onChange={(e) => setInstBrand(e.target.value)}
                   placeholder="Ex: Fender, Gibson, Rozini"
-                  className="w-full px-3 py-2 bg-stone-950 border border-stone-700 rounded-xl text-xs text-white"
+                  className="w-full px-3 py-2 bg-base-950 border border-base-700 rounded-xl text-xs text-base-50"
                 />
               </div>
               <div>
-                <label className="text-[11px] uppercase font-bold text-stone-400 block mb-1">
+                <label className="text-[11px] uppercase font-semibold text-base-400 block mb-1">
                   Modelo *
                 </label>
                 <input
@@ -603,14 +616,14 @@ export const ClientsModule: React.FC = () => {
                   value={instModel}
                   onChange={(e) => setInstModel(e.target.value)}
                   placeholder="Ex: Stratocaster, Les Paul"
-                  className="w-full px-3 py-2 bg-stone-950 border border-stone-700 rounded-xl text-xs text-white"
+                  className="w-full px-3 py-2 bg-base-950 border border-base-700 rounded-xl text-xs text-base-50"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="text-[11px] uppercase font-bold text-stone-400 block mb-1">
+                <label className="text-[11px] uppercase font-semibold text-base-400 block mb-1">
                   Nº de Série
                 </label>
                 <input
@@ -618,11 +631,11 @@ export const ClientsModule: React.FC = () => {
                   value={instSerial}
                   onChange={(e) => setInstSerial(e.target.value)}
                   placeholder="Ex: US2109841"
-                  className="w-full px-3 py-2 bg-stone-950 border border-stone-700 rounded-xl text-xs text-white"
+                  className="w-full px-3 py-2 bg-base-950 border border-base-700 rounded-xl text-xs text-base-50"
                 />
               </div>
               <div>
-                <label className="text-[11px] uppercase font-bold text-stone-400 block mb-1">
+                <label className="text-[11px] uppercase font-semibold text-base-400 block mb-1">
                   Calibre Cordas
                 </label>
                 <input
@@ -630,22 +643,22 @@ export const ClientsModule: React.FC = () => {
                   value={instGauge}
                   onChange={(e) => setInstGauge(e.target.value)}
                   placeholder="0.10, 0.11, etc."
-                  className="w-full px-3 py-2 bg-stone-950 border border-stone-700 rounded-xl text-xs text-white"
+                  className="w-full px-3 py-2 bg-base-950 border border-base-700 rounded-xl text-xs text-base-50"
                 />
               </div>
             </div>
 
-            <div className="flex gap-2 pt-2 border-t border-stone-800">
+            <div className="flex gap-2 pt-2 border-t border-base-800">
               <button
                 type="button"
                 onClick={() => setIsNewInstOpen(false)}
-                className="flex-1 py-2.5 rounded-xl bg-stone-800 text-xs font-semibold text-stone-300"
+                className="flex-1 py-2.5 rounded-xl bg-base-800 text-xs font-semibold text-base-300"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                className="flex-1 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold"
+                className="flex-1 py-2.5 rounded-xl bg-accent-600 hover:bg-accent-500 text-on-accent text-xs font-semibold"
               >
                 Cadastrar Instrumento
               </button>

@@ -1,55 +1,103 @@
-# Oficina Luthier - Gestão Mobile-First
+# srv-lutheria-front
 
-Aplicativo de gestão projetado especificamente para oficinas de lutheria (construção, manutenção e reparo de instrumentos de cordas e clássicos). O celular é a plataforma principal, com alvos de toque generosos, zona do polegar e fluxo otimizado para o luthier na bancada e o atendente no balcão.
+Front-end do sistema de gestão para oficinas de luthieria (React 19 + TypeScript + Vite +
+Tailwind CSS 4). Mobile-first, responsivo até desktop, com tema claro/escuro e cores
+configuráveis. Backend: [srv-lutheria](https://github.com/o-FM/srv-lutheria).
 
----
+## Rodando
 
-## 🎯 Decisões de UX e Ergonomia Mobile
+```bash
+npm install
 
-1. **Zona do Polegar Prioritária**:
-   - Navegação inferior fixa com **5 abas essenciais**: `Hoje`, `OS`, `+ Nova OS (FAB central elevado)`, `Clientes`, `Estoque` e `Mais`.
-   - Botões de ação principal (Avançar Status, Tirar Foto, Aprovar Orçamento) posicionados na metade inferior da tela.
+# Modo demonstração (sem backend): dados de exemplo + login simulado pelo server.ts
+npm run dev                     # http://localhost:3000
 
-2. **Alvos de Toque $\ge 48$px**:
-   - Espaçamento calibrado para toque fácil mesmo com luvas finas de látex ou mãos com resíduos de lixa, cola e verniz.
+# Com a API real (srv-lutheria rodando em :8080)
+echo "VITE_API_URL=http://localhost:8080" > .env.local
+npm run dev:vite                # http://localhost:5173
 
-3. **Fluxo de Abertura de OS em < 60 segundos (3 Passos)**:
-   - **Passo 1**: Selecionar ou criar cliente rapidamente com máscara de telefone.
-   - **Passo 2**: Instrumento + **Foto Primeiro** (câmera ao vivo ou galeria) + **Ditado por voz** no defeito relatado.
-   - **Passo 3**: Seleção de serviços pré-configurados + prazo estimado + confirmação imediata.
+npm run build                   # checagem de tipos + build de produção em dist/
+```
 
-4. **Modo Bancada (Workbench Mode)**:
-   - Interface de altíssimo contraste e botões extragrandes ($\ge 64$px).
-   - Cronômetro/timer integrado para tempo de cura de cola (Titebond 30 min, cianoacrilato, verniz goma-laca).
-   - Checklist de serviços em 1 toque.
+O modo é decidido por `VITE_API_URL` (`src/config/env.ts`): vazio → demonstração; preenchido →
+API. Em produção o `dist/` é estático e pode ser servido por qualquer CDN/servidor web, com
+fallback de rotas para `index.html` (rotas públicas abaixo).
 
-5. **Portal do Cliente Sem Senha**:
-   - Acompanhamento via link único e token seguro (ex: `FNDR-1042-LS`).
-   - Linha do tempo com fotos de antes e depois.
-   - Botão de **Aprovação de Orçamento em 1 toque** com feedback comemorativo.
+## Estrutura
 
-6. **Offline-First**:
-   - Persistência contínua com armazenamento local.
-   - Alternador no cabeçalho para simular perda de sinal e sincronização com fila de requisições.
+```
+src/
+├─ config/           env.ts (modo API/demo), navigation.ts (abas por papel)
+├─ context/          AuthContext (sessão), AppContext (dados), ThemeContext (aparência)
+├─ services/
+│  ├─ api/           cliente HTTP, tipos, endpoints e mapeadores da API srv-luthieria
+│  └─ authApi.ts     fachada de autenticação (API real ou servidor mock)
+├─ pages/            páginas públicas: portal do cliente, cadastro, redefinir senha
+├─ components/       telas e componentes (common/, orders/, clients/, stock/, ...)
+└─ index.css         design tokens (cores, modos e paletas)
+```
 
----
+## Integração com a API
 
-## 👥 Personas Disponíveis para Teste
+`src/services/api` tem um método tipado para **cada endpoint** do backend
+(`api.customers.create`, `api.orders.sendQuote`, `api.portal.approve`, ...), com:
 
-Você pode alternar entre as 3 personas a qualquer momento no seletor no cabeçalho:
-1. **Luthier / Dono (Armando)**: Visão de bancada, avanço de status, controle de peças e financeiro.
-2. **Atendente / Balcão (Mariana)**: Abertura rápida de OS, contato via WhatsApp em 1 toque, check-in.
-3. **Cliente (Lucas Silveira)**: Portal simplificado de acompanhamento e aprovação de orçamento.
+- `Authorization: Bearer` automático e **renovação de sessão**: em 401 o refresh token é trocado
+  (rotação) e a requisição repetida uma vez; se falhar, volta para o login.
+- Erros RFC 9457 viram `ApiError` com mensagem amigável e `fieldErrors` por campo.
+- `mappers.ts` converte os DTOs para os tipos das telas, isolando o formato do backend.
 
----
+| Tela / ação | Endpoint |
+|---|---|
+| Login, sair, "esqueci minha senha" | `/auth/login`, `/auth/logout`, `/auth/forgot-password` |
+| Cadastro da oficina (`/cadastro`) | `POST /auth/register` |
+| Redefinir senha (`/redefinir-senha#token=`) | `POST /auth/reset-password` |
+| Usuário logado | `GET /users/me` |
+| Carga inicial | `/customers`, `/instruments`, `/products`, `/service-orders?full=true` |
+| Novo cliente / instrumento | `POST /customers`, `POST /customers/{id}/instruments` |
+| Nova OS (wizard) | `POST /service-orders` |
+| Avançar status | `/status`, ou `quote/send` e `quote/approve` nas etapas de orçamento |
+| Aprovar / recusar orçamento | `/quote/approve`, `/quote/reject` |
+| Serviços e peças da OS | `/services`, `/services/{id}/done`, `/parts` |
+| Pagamento | `POST /service-orders/{id}/payments` |
+| Estoque +1/−1 | `POST /products/{id}/movements` |
+| Portal do cliente (`/acompanhar/{token}`) | `/portal/orders/{token}` (+ approve/reject) |
+| Logs de auditoria (admin) | `GET /audit-logs` |
 
-## 📦 Módulos do Sistema
+Também prontos no cliente, para as próximas telas: catálogo de serviços, relatórios
+(`/reports/dashboard`, `/reports/financial`), notificações, exportação/anonimização LGPD e gestão
+de usuários.
 
-1. **Hoje (Dashboard)**: Métricas do dia, prazos críticos, alertas de estoque baixo e atalhos rápidos.
-2. **Ordens de Serviço**: Lista e modo Kanban com filtros de status (`Recebido` → `Diagnóstico` → `Orçamento` → `Aguardando aprovação` → `Em execução` → `Pronto` → `Entregue`).
-3. **Clientes**: Cadastro, histórico de instrumentos e atalhos de ligação e WhatsApp em 1 toque.
-4. **Instrumentos**: Ficha técnica com tipo, marca, modelo, ano, calibre de cordas e afinação.
-5. **Estoque**: Peças, cordas, madeiras e insumos com leitor de código de barras/QR pela câmera e ajuste rápido (+1 / -1).
-6. **Agenda**: Visualização de entregas e compromissos.
-7. **Financeiro**: Resumo mensal, formas de pagamento (Pix, cartão, dinheiro) e recibos.
-8. **Mensagens**: Gerador de textos prontos para WhatsApp.
+Ainda sem endpoint no backend (funcionam só no dispositivo): fotos de OS/instrumentos,
+alteração de dados da própria conta e o simulador offline.
+
+## Aparência
+
+Menu do usuário → **Aparência** (ou *Mais → Configurações*):
+
+- Modo: claro, escuro ou do sistema.
+- Cor de destaque: âmbar, azul, esmeralda, violeta, rosa, petróleo.
+- Tom dos neutros: quente, neutro, ardósia.
+
+Os componentes usam só as escalas semânticas `base-*` (neutros) e `accent-*` (destaque),
+definidas em `src/index.css` e trocadas em tempo real por atributos no `<html>`. Para criar uma
+nova paleta, basta adicionar um bloco `:root[data-accent="..."]` e incluí-la em
+`ThemeContext.ACCENTS`.
+
+## Análise do projeto (out/2026)
+
+O que foi encontrado e o que mudou nesta versão:
+
+| Tema | Antes | Agora |
+|---|---|---|
+| Layout | Barra inferior de celular também no desktop; conteúdo espremido ao centro; cabeçalho com 6 botões no celular | Barra lateral em telas grandes, cabeçalho enxuto, barra inferior só até tablet; modais centralizados no desktop e com rolagem no celular |
+| Cores | ~1.200 classes `stone-*`/`amber-*` fixas; "modo escuro" que não mudava nada | Tokens semânticos, modo claro/escuro real e 6 cores × 3 tons |
+| Visual | Gradientes, sombras grandes, emojis, pesos 800–900 | Superfícies planas, uma fonte (Inter), pesos 400–600 |
+| Acessibilidade | Zoom bloqueado (`user-scalable=no`), seleção de texto desligada | Zoom liberado, texto selecionável, foco visível, `prefers-reduced-motion`, rótulos ARIA na navegação |
+| Dados | Só `localStorage` com dados de exemplo; login simulado | Camada de API tipada com renovação de sessão; modo demonstração mantido |
+| Rotas | Nenhuma (links do portal/e-mail não abriam nada) | `/acompanhar/{token}`, `/cadastro`, `/redefinir-senha` |
+| Projeto | Template do AI Studio (`react-example`, `@google/genai` e `motion` sem uso, dois lockfiles) | Nome próprio, dependências enxutas, `npm run build` com checagem de tipos, `.env.example` |
+
+Próximos passos recomendados: roteador completo (react-router) para abas com URL, cache de dados
+(TanStack Query) no lugar do estado global, testes (Vitest + Testing Library + Playwright) e
+upload de fotos quando o backend tiver o endpoint.

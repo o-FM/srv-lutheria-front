@@ -1,24 +1,36 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-mode="dark">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <title>Oficina Luthier - Gestão Mobile First</title>
-    <meta name="description" content="App mobile-first para gestão de luthieria e oficina de instrumentos musicais com OS rápida, fotos da bancada, orçamentos, estoque e portal do cliente." />
-    <meta property="og:title" content="Oficina Luthier - Gestão Mobile First" />
-    <meta property="og:description" content="App mobile-first para gestão de luthieria e oficina de instrumentos musicais com OS rápida, fotos da bancada, orçamentos, estoque e portal do cliente." />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Oficina Luthier</title>
+    <meta name="description" content="Gestão para oficinas de luthieria: ordens de serviço, orçamentos, estoque, clientes e portal do cliente." />
+    <meta property="og:title" content="Oficina Luthier" />
+    <meta property="og:description" content="Gestão para oficinas de luthieria: ordens de serviço, orçamentos, estoque, clientes e portal do cliente." />
     <meta property="og:type" content="website" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="theme-color" content="#1c1917" />
+    <meta name="theme-color" content="#0c0a09" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet" />
+    <script>
+      // Aplica o tema salvo antes da primeira pintura (evita piscar claro/escuro)
+      (function () {
+        try {
+          var t = JSON.parse(localStorage.getItem('luthier_theme') || '{}');
+          var mode = t.mode && t.mode !== 'system' ? t.mode
+            : (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+          var root = document.documentElement;
+          root.dataset.mode = mode;
+          if (t.accent) root.dataset.accent = t.accent;
+          if (t.tone) root.dataset.tone = t.tone;
+        } catch (e) {}
+      })();
+    </script>
   </head>
-  <body class="bg-stone-100 text-stone-900 antialiased selection:bg-amber-500 selection:text-white">
+  <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-

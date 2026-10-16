@@ -34,18 +34,18 @@ export const StockModule: React.FC = () => {
   if (currentRole !== 'luthier') {
     return (
       <div className="p-8 max-w-md mx-auto text-center space-y-4">
-        <div className="w-16 h-16 rounded-3xl bg-rose-950/60 border border-rose-800 text-rose-400 flex items-center justify-center mx-auto shadow-xl">
+        <div className="w-16 h-16 rounded-2xl bg-rose-950/60 border border-rose-800 text-rose-400 flex items-center justify-center mx-auto ">
           <Package className="w-8 h-8" />
         </div>
-        <h2 className="text-lg font-bold text-white">Módulo de Estoque Restrito</h2>
-        <p className="text-xs text-stone-300 leading-relaxed">
+        <h2 className="text-lg font-semibold text-base-50">Módulo de Estoque Restrito</h2>
+        <p className="text-xs text-base-300 leading-relaxed">
           O controle de peças, madeiras e insumos é de acesso exclusivo do <strong>Luthier / Dono (Admin)</strong>.
           O perfil de Recepção possui acesso a Clientes, OS e Agenda.
         </p>
         <button
           type="button"
           onClick={() => setAppActiveTab('os')}
-          className="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-md"
+          className="px-4 py-2.5 rounded-xl bg-accent-600 hover:bg-accent-500 text-on-accent font-semibold text-xs "
         >
           Voltar para Ordens de Serviço
         </button>
@@ -99,24 +99,24 @@ export const StockModule: React.FC = () => {
   };
 
   return (
-    <div className="space-y-4 pb-24 max-w-4xl mx-auto">
+    <div className="space-y-5">
       {/* Header Search & QR Scanner */}
       <div className="flex items-center gap-2">
         <div className="flex-1 relative">
-          <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-base-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Buscar peça, corda, madeira ou SKU..."
-            className="w-full pl-9 pr-3 py-2.5 bg-stone-900 border border-stone-800 rounded-xl text-xs text-white placeholder-stone-500 focus:outline-none focus:border-amber-500"
+            className="w-full pl-9 pr-3 py-2.5 bg-base-900 border border-base-800 rounded-xl text-xs text-base-50 placeholder-base-500 focus:outline-none focus:border-accent-500"
           />
         </div>
 
         <button
           type="button"
           onClick={handleScanBarcode}
-          className="flex items-center gap-1.5 px-3 py-2.5 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded-xl shadow-md active:scale-95 transition-all shrink-0"
+          className="flex items-center gap-1.5 px-3 py-2.5 bg-accent-600 hover:bg-accent-500 text-on-accent text-xs font-semibold rounded-xl active:scale-95 transition-all shrink-0"
           title="Ler Código de Barras / QR Code pela câmera"
         >
           <QrCode className="w-4 h-4" />
@@ -130,7 +130,7 @@ export const StockModule: React.FC = () => {
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
             <div>
-              <p className="text-xs font-bold text-white">
+              <p className="text-xs font-semibold text-base-50">
                 {lowStockItems.length} produto(s) abaixo do estoque mínimo
               </p>
               <p className="text-[11px] text-rose-300">
@@ -144,7 +144,7 @@ export const StockModule: React.FC = () => {
               setCategoryFilter('todos');
               setSearchTerm('');
             }}
-            className="text-[11px] font-bold text-amber-400 hover:underline shrink-0"
+            className="text-[11px] font-semibold text-accent-400 hover:underline shrink-0"
           >
             Ver Itens
           </button>
@@ -170,8 +170,8 @@ export const StockModule: React.FC = () => {
               }}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all border ${
                 isActive
-                  ? 'bg-amber-950 border-amber-600 text-amber-200 shadow-sm'
-                  : 'bg-stone-900 border-stone-800 text-stone-400 hover:text-stone-200'
+                  ? 'bg-accent-950 border-accent-600 text-accent-200 shadow-sm'
+                  : 'bg-base-900 border-base-800 text-base-400 hover:text-base-200'
               }`}
             >
               {cat.label} <span className="opacity-75 font-mono ml-0.5">({count})</span>
@@ -181,12 +181,12 @@ export const StockModule: React.FC = () => {
       </div>
 
       {/* View Selector (Itens vs Movimentações) */}
-      <div className="flex gap-1 bg-stone-900 p-1 rounded-xl border border-stone-800">
+      <div className="flex gap-1 bg-base-900 p-1 rounded-xl border border-base-800">
         <button
           type="button"
           onClick={() => setActiveTab('itens')}
           className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
-            activeTab === 'itens' ? 'bg-amber-950 text-amber-200 border border-amber-800' : 'text-stone-400'
+            activeTab === 'itens' ? 'bg-accent-950 text-accent-200 border border-accent-800' : 'text-base-400'
           }`}
         >
           Catálogo de Itens ({filteredStock.length})
@@ -196,8 +196,8 @@ export const StockModule: React.FC = () => {
           onClick={() => setActiveTab('historico')}
           className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
             activeTab === 'historico'
-              ? 'bg-amber-950 text-amber-200 border border-amber-800'
-              : 'text-stone-400'
+              ? 'bg-accent-950 text-accent-200 border border-accent-800'
+              : 'text-base-400'
           }`}
         >
           Histórico de Baixas ({stockMovements.length})
@@ -213,49 +213,49 @@ export const StockModule: React.FC = () => {
             return (
               <div
                 key={item.id}
-                className={`p-3.5 rounded-2xl bg-stone-900 border transition-all shadow-md space-y-2 ${
-                  isLow ? 'border-rose-700/80 bg-rose-950/20' : 'border-stone-800'
+                className={`p-3.5 rounded-2xl bg-base-900 border transition-all space-y-2 ${
+                  isLow ? 'border-rose-700/80 bg-rose-950/20' : 'border-base-800'
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-xs text-white truncate">
+                      <span className="font-semibold text-xs text-base-50 truncate">
                         {item.name}
                       </span>
                       {isLow && (
-                        <span className="px-1.5 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-800 text-[10px] font-bold uppercase shrink-0">
+                        <span className="px-1.5 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-800 text-[10px] font-semibold uppercase shrink-0">
                           Estoque Baixo
                         </span>
                       )}
                     </div>
-                    <p className="text-[11px] text-stone-400 mt-0.5">
+                    <p className="text-[11px] text-base-400 mt-0.5">
                       {item.brand} · {item.location} · SKU: <span className="font-mono">{item.sku}</span>
                     </p>
                   </div>
 
                   <div className="text-right shrink-0">
-                    <span className="font-mono text-xs font-bold text-amber-400">
+                    <span className="font-mono text-xs font-semibold text-accent-400">
                       R$ {item.salePrice.toFixed(2)}
                     </span>
-                    <span className="text-[10px] text-stone-500 block">
+                    <span className="text-[10px] text-base-500 block">
                       Custo: R$ {item.costPrice.toFixed(2)}
                     </span>
                   </div>
                 </div>
 
                 {/* Stock Level & Thumb Touch Stepper */}
-                <div className="pt-2 border-t border-stone-800/80 flex items-center justify-between">
+                <div className="pt-2 border-t border-base-800/80 flex items-center justify-between">
                   <div className="text-xs">
-                    <span className="text-stone-400">Em estoque: </span>
+                    <span className="text-base-400">Em estoque: </span>
                     <span
-                      className={`font-mono font-bold text-sm ${
+                      className={`font-mono font-semibold text-sm ${
                         isLow ? 'text-rose-400' : 'text-emerald-400'
                       }`}
                     >
                       {item.currentQuantity} {item.unit}
                     </span>
-                    <span className="text-[10px] text-stone-500 ml-1">
+                    <span className="text-[10px] text-base-500 ml-1">
                       (mínimo: {item.minQuantity})
                     </span>
                   </div>
@@ -268,7 +268,7 @@ export const StockModule: React.FC = () => {
                       onClick={() =>
                         updateStockQuantity(item.id, -1, 'Ajuste manual rápido na oficina')
                       }
-                      className="w-10 h-10 rounded-xl bg-stone-800 hover:bg-stone-700 disabled:opacity-40 text-stone-200 flex items-center justify-center font-bold active:scale-95 transition-all"
+                      className="w-10 h-10 rounded-xl bg-base-800 hover:bg-base-700 disabled:opacity-40 text-base-200 flex items-center justify-center font-semibold active:scale-95 transition-all"
                       title="Dar baixa em 1 unidade"
                     >
                       <Minus className="w-4 h-4" />
@@ -278,7 +278,7 @@ export const StockModule: React.FC = () => {
                       onClick={() =>
                         updateStockQuantity(item.id, 1, 'Entrada rápida na oficina')
                       }
-                      className="w-10 h-10 rounded-xl bg-amber-600 hover:bg-amber-500 text-white flex items-center justify-center font-bold active:scale-95 transition-all shadow-sm"
+                      className="w-10 h-10 rounded-xl bg-accent-600 hover:bg-accent-500 text-on-accent flex items-center justify-center font-semibold active:scale-95 transition-all shadow-sm"
                       title="Adicionar 1 unidade"
                     >
                       <Plus className="w-4 h-4" />
@@ -295,7 +295,7 @@ export const StockModule: React.FC = () => {
           {stockMovements.map((mov) => (
             <div
               key={mov.id}
-              className="p-3 rounded-xl bg-stone-900 border border-stone-800 flex items-center justify-between"
+              className="p-3 rounded-xl bg-base-900 border border-base-800 flex items-center justify-between"
             >
               <div className="min-w-0 pr-2">
                 <div className="flex items-center gap-2">
@@ -304,15 +304,15 @@ export const StockModule: React.FC = () => {
                   ) : (
                     <TrendingDown className="w-4 h-4 text-rose-400 shrink-0" />
                   )}
-                  <p className="text-xs font-bold text-white truncate">
+                  <p className="text-xs font-semibold text-base-50 truncate">
                     {mov.stockItemName}
                   </p>
                 </div>
-                <p className="text-[11px] text-stone-400 mt-0.5">{mov.reason}</p>
-                <span className="text-[10px] text-stone-500">{mov.date}</span>
+                <p className="text-[11px] text-base-400 mt-0.5">{mov.reason}</p>
+                <span className="text-[10px] text-base-500">{mov.date}</span>
               </div>
               <span
-                className={`font-mono text-xs font-bold shrink-0 ${
+                className={`font-mono text-xs font-semibold shrink-0 ${
                   mov.type === 'entrada' ? 'text-emerald-400' : 'text-rose-400'
                 }`}
               >

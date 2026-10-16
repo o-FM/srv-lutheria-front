@@ -14,6 +14,10 @@ import {
   Photo,
   ServiceItem,
 } from '../types';
+import { isApiMode } from '../config/env';
+import { api, ApiError, mappers } from '../services/api';
+import type { OrderDto } from '../services/api';
+import { useAuth } from './AuthContext';
 import {
   INITIAL_CLIENTS,
   INITIAL_INSTRUMENTS,
@@ -41,8 +45,9 @@ interface AppContextType {
   activeOrderId: string | null;
   isNewOrderWizardOpen: boolean;
   isWorkbenchModeOpen: boolean;
-  isDarkMode: boolean;
   toasts: ToastMessage[];
+  /** Carregando dados da API (modo API). */
+  isLoadingData: boolean;
 
   // Modals & Camera Callbacks
   isCameraModalOpen: boolean;
@@ -51,7 +56,8 @@ interface AppContextType {
   barcodeCallback: ((code: string) => void) | null;
 
   // Actions
-  setRole: (role: UserRole) => void;
+  /** silent: não mostra aviso (sincronização automática com o usuário logado). */
+  setRole: (role: UserRole, options?: { silent?: boolean }) => void;
   setActiveTab: (tab: string) => void;
   setSearchQuery: (query: string) => void;
   addRecentSearch: (query: string) => void;
@@ -60,7 +66,6 @@ interface AppContextType {
   setActiveOrderId: (id: string | null) => void;
   setIsNewOrderWizardOpen: (open: boolean) => void;
   setIsWorkbenchModeOpen: (open: boolean) => void;
-  toggleDarkMode: () => void;
   toggleSyncStatus: () => void;
   triggerHaptic: () => void;
 
@@ -71,28 +76,50 @@ interface AppContextType {
   // Domain Actions
   advanceOrderStatus: (orderId: string, specificStatus?: OrderStatus, note?: string) => void;
   updateOrder: (orderId: string, updates: Partial<Order>) => void;
-  createOrder: (orderData: Partial<Order>, clientId: string, instrumentId: string) => Order;
+  createOrder: (orderData: Partial<Order>, clientId: string, instrumentId: string) => Promise<Order>;
   addServiceItem: (orderId: string, service: Omit<ServiceItem, 'id'>) => void;
   toggleServiceDone: (orderId: string, serviceId: string) => void;
   addOrderPhoto: (orderId: string, photo: Omit<Photo, 'id' | 'timestamp'>) => void;
   approveQuote: (orderId: string) => void;
   rejectQuote: (orderId: string, reason: string) => void;
 
-  createClient: (clientData: Omit<Client, 'id' | 'createdAt'>) => Client;
-  createInstrument: (instrumentData: Omit<Instrument, 'id' | 'createdAt' | 'photos'>, photos?: Photo[]) => Instrument;
+  createClient: (clientData: Omit<Client, 'id' | 'createdAt'>) => Promise<Client>;
+  createInstrument: (instrumentData: Omit<Instrument, 'id' | 'createdAt' | 'photos'>, photos?: Photo[]) => Promise<Instrument>;
 
   updateStockQuantity: (stockItemId: string, delta: number, reason: string, orderId?: string) => void;
-  recordPayment: (payment: Omit<Payment, 'id' | 'receiptNumber'>) => Payment;
+  recordPayment: (payment: Omit<Payment, 'id' | 'receiptNumber'>) => Promise<Payment>;
 
   openCamera: (callback: (photoUrl: string, caption?: string) => void) => void;
   closeCamera: () => void;
   openBarcodeScanner: (callback: (code: string) => void) => void;
   closeBarcodeScanner: () => void;
 
+  /** Modo demonstração: restaura dados de exemplo. Modo API: recarrega do servidor. */
   resetToDefaults: () => void;
+  reloadData: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
+
+/** Modo demonstração: dados locais (localStorage) com seed. Modo API: começa vazio. */
+function loadDemo<T>(key: string, seed: T[]): T[] {
+  if (isApiMode) return [];
+  try {
+    const saved = localStorage.getItem(key);
+    return saved ? JSON.parse(saved) : seed;
+  } catch {
+    return seed;
+  }
+}
+
+function persistDemo(key: string, value: unknown) {
+  if (isApiMode) return;
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // armazenamento cheio/indisponível: segue só em memória
+  }
+}
 
 const STATUS_FLOW: OrderStatus[] = [
   'recebido',
@@ -107,33 +134,27 @@ const STATUS_FLOW: OrderStatus[] = [
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // Load from localStorage or seed
   const [clients, setClients] = useState<Client[]>(() => {
-    const saved = localStorage.getItem('luthier_clients');
-    return saved ? JSON.parse(saved) : INITIAL_CLIENTS;
+    return loadDemo('luthier_clients', INITIAL_CLIENTS);
   });
 
   const [instruments, setInstruments] = useState<Instrument[]>(() => {
-    const saved = localStorage.getItem('luthier_instruments');
-    return saved ? JSON.parse(saved) : INITIAL_INSTRUMENTS;
+    return loadDemo('luthier_instruments', INITIAL_INSTRUMENTS);
   });
 
   const [orders, setOrders] = useState<Order[]>(() => {
-    const saved = localStorage.getItem('luthier_orders');
-    return saved ? JSON.parse(saved) : INITIAL_ORDERS;
+    return loadDemo('luthier_orders', INITIAL_ORDERS);
   });
 
   const [stock, setStock] = useState<StockItem[]>(() => {
-    const saved = localStorage.getItem('luthier_stock');
-    return saved ? JSON.parse(saved) : INITIAL_STOCK;
+    return loadDemo('luthier_stock', INITIAL_STOCK);
   });
 
   const [payments, setPayments] = useState<Payment[]>(() => {
-    const saved = localStorage.getItem('luthier_payments');
-    return saved ? JSON.parse(saved) : INITIAL_PAYMENTS;
+    return loadDemo('luthier_payments', INITIAL_PAYMENTS);
   });
 
   const [stockMovements, setStockMovements] = useState<StockMovement[]>(() => {
-    const saved = localStorage.getItem('luthier_movements');
-    return saved ? JSON.parse(saved) : INITIAL_MOVEMENTS;
+    return loadDemo('luthier_movements', INITIAL_MOVEMENTS);
   });
 
   // UI state
@@ -154,11 +175,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [isWorkbenchModeOpen, setIsWorkbenchModeOpen] = useState<boolean>(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  // Dark mode
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
-    return localStorage.getItem('luthier_dark_mode') === 'true';
-  });
-
   // Modals
   const [isCameraModalOpen, setIsCameraModalOpen] = useState<boolean>(false);
   const [cameraCallback, setCameraCallback] = useState<((photoUrl: string, caption?: string) => void) | null>(null);
@@ -167,37 +183,29 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Sync to localStorage
   useEffect(() => {
-    localStorage.setItem('luthier_clients', JSON.stringify(clients));
+    persistDemo('luthier_clients', clients);
   }, [clients]);
 
   useEffect(() => {
-    localStorage.setItem('luthier_instruments', JSON.stringify(instruments));
+    persistDemo('luthier_instruments', instruments);
   }, [instruments]);
 
   useEffect(() => {
-    localStorage.setItem('luthier_orders', JSON.stringify(orders));
+    persistDemo('luthier_orders', orders);
   }, [orders]);
 
   useEffect(() => {
-    localStorage.setItem('luthier_stock', JSON.stringify(stock));
+    persistDemo('luthier_stock', stock);
   }, [stock]);
 
   useEffect(() => {
-    localStorage.setItem('luthier_payments', JSON.stringify(payments));
+    persistDemo('luthier_payments', payments);
   }, [payments]);
 
   useEffect(() => {
-    localStorage.setItem('luthier_movements', JSON.stringify(stockMovements));
+    persistDemo('luthier_movements', stockMovements);
   }, [stockMovements]);
 
-  useEffect(() => {
-    localStorage.setItem('luthier_dark_mode', String(isDarkMode));
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, [isDarkMode]);
 
   const triggerHaptic = useCallback(() => {
     if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
@@ -224,10 +232,83 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  const toggleDarkMode = useCallback(() => {
-    setIsDarkMode((prev) => !prev);
-    triggerHaptic();
-  }, [triggerHaptic]);
+  // ---------------------------------------------------------------------------
+  // Modo API: carga inicial e helpers
+  // ---------------------------------------------------------------------------
+  const { isAuthenticated } = useAuth();
+  const [isLoadingData, setIsLoadingData] = useState<boolean>(false);
+
+  const fail = useCallback(
+    (error: unknown, title: string) => {
+      const description = error instanceof Error ? error.message : undefined;
+      showToast({ title, description, type: 'error' });
+    },
+    [showToast]
+  );
+
+  /** Substitui (ou insere) a OS e seus pagamentos com a resposta do servidor. */
+  const applyOrder = useCallback(
+    (dto: OrderDto) => {
+      const order = mappers.toOrder(dto);
+      setOrders((prev) =>
+        prev.some((o) => o.id === order.id)
+          ? prev.map((o) => (o.id === order.id ? order : o))
+          : [order, ...prev]
+      );
+      setPayments((prev) => [
+        ...mappers.paymentsFrom([dto], clients, instruments),
+        ...prev.filter((p) => p.orderId !== dto.id),
+      ]);
+      return order;
+    },
+    [clients, instruments]
+  );
+
+  const reloadData = useCallback(async () => {
+    if (!isApiMode || !isAuthenticated) return;
+    setIsLoadingData(true);
+    try {
+      // Cada papel enxerga partes diferentes da API; o que for proibido (403) vira lista vazia.
+      const optional = <T,>(p: Promise<T[]>) =>
+        p.catch((e) => {
+          if (e instanceof ApiError && e.status === 403) return [] as T[];
+          throw e;
+        });
+      const [customerDtos, instrumentDtos, productDtos, orderDtos] = await Promise.all([
+        optional(api.customers.all()),
+        optional(api.customers.allInstruments()),
+        optional(api.products.all()),
+        optional(api.orders.all()),
+      ]);
+      const loadedClients = customerDtos.map(mappers.toClient);
+      const loadedInstruments = instrumentDtos.map(mappers.toInstrument);
+      setClients(loadedClients);
+      setInstruments(loadedInstruments);
+      setStock(productDtos.map(mappers.toStockItem));
+      setOrders(orderDtos.map(mappers.toOrder));
+      setPayments(mappers.paymentsFrom(orderDtos, loadedClients, loadedInstruments));
+      setStockMovements([]);
+    } catch (e) {
+      fail(e, 'Não foi possível carregar os dados da oficina');
+    } finally {
+      setIsLoadingData(false);
+    }
+  }, [isAuthenticated, fail]);
+
+  useEffect(() => {
+    if (isApiMode && isAuthenticated) {
+      reloadData();
+    }
+    if (isApiMode && !isAuthenticated) {
+      // Logout: nada de dados de uma luthieria ficar na memória para a próxima sessão
+      setClients([]);
+      setInstruments([]);
+      setOrders([]);
+      setStock([]);
+      setPayments([]);
+      setStockMovements([]);
+    }
+  }, [isAuthenticated, reloadData]);
 
   const toggleSyncStatus = useCallback(() => {
     triggerHaptic();
@@ -258,13 +339,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [triggerHaptic, showToast]);
 
   const setRole = useCallback(
-    (role: UserRole) => {
+    (role: UserRole, options?: { silent?: boolean }) => {
       setRoleState(role);
+      if (options?.silent) return;
       triggerHaptic();
       const roleLabels: Record<UserRole, string> = {
-        luthier: 'Luthier / Dono (Bancada & Gestão)',
-        atendente: 'Atendente / Balcão (Recepção & OS Rápida)',
-        cliente: 'Visão do Cliente (Portal sem senha)',
+        luthier: 'Luthier / Dono',
+        atendente: 'Atendente / Balcão',
+        estoquista: 'Estoquista',
+        cliente: 'Visão do Cliente',
       };
       showToast({
         title: `Perfil alterado para ${roleLabels[role]}`,
@@ -290,6 +373,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // Update Stock with log
   const updateStockQuantity = useCallback(
     (stockItemId: string, delta: number, reason: string, orderId?: string) => {
+      if (isApiMode) {
+        const item = stock.find((s) => s.id === stockItemId);
+        api.products
+          .move(stockItemId, {
+            type: delta >= 0 ? 'entrada' : 'saida',
+            quantity: Math.abs(delta),
+            reason,
+            orderId,
+          })
+          .then((movement) => {
+            setStock((prev) =>
+              prev.map((s) => (s.id === stockItemId ? { ...s, currentQuantity: movement.balanceAfter } : s))
+            );
+            setStockMovements((prev) => [mappers.toStockMovement(movement, item?.name ?? ''), ...prev]);
+          })
+          .catch((e) => fail(e, 'Movimentação não registrada'));
+        return;
+      }
       setStock((prev) =>
         prev.map((item) => {
           if (item.id === stockItemId) {
@@ -315,13 +416,35 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setStockMovements((prev) => [movement, ...prev]);
       }
     },
-    [stock]
+    [stock, fail]
   );
 
   // Advance Order Status
   const advanceOrderStatus = useCallback(
     (orderId: string, specificStatus?: OrderStatus, note?: string) => {
       triggerHaptic();
+
+      if (isApiMode) {
+        const order = orders.find((o) => o.id === orderId);
+        if (!order) return;
+        const index = STATUS_FLOW.indexOf(order.status);
+        const next = specificStatus ?? STATUS_FLOW[index + 1];
+        if (!next) return;
+        // Envio e aprovação de orçamento têm endpoints próprios (regras do backend)
+        const call =
+          next === 'aguardando_aprovacao'
+            ? api.orders.sendQuote(orderId)
+            : order.status === 'aguardando_aprovacao' && next === 'em_execucao'
+            ? api.orders.approveQuote(orderId)
+            : api.orders.changeStatus(orderId, next, note);
+        call
+          .then((dto) => {
+            applyOrder(dto);
+            showToast({ title: `OS #${dto.orderNumber}: ${dto.status.replace(/_/g, ' ')}`, type: 'success' });
+          })
+          .catch((e) => fail(e, 'Não foi possível mudar o status'));
+        return;
+      }
 
       setOrders((prev) => {
         const order = prev.find((o) => o.id === orderId);
@@ -444,17 +567,41 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         );
       });
     },
-    [currentRole, triggerHaptic, showToast, updateStockQuantity, syncStatus]
+    [currentRole, triggerHaptic, showToast, updateStockQuantity, syncStatus, orders, applyOrder, fail]
   );
 
-  const updateOrder = useCallback((orderId: string, updates: Partial<Order>) => {
-    setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, ...updates } : o))
-    );
-  }, []);
+  const updateOrder = useCallback(
+    (orderId: string, updates: Partial<Order>) => {
+      setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, ...updates } : o)));
+      if (isApiMode) {
+        const { priority, diagnosisNotes, technicianNotes, estimatedDeliveryDate } = updates;
+        if ([priority, diagnosisNotes, technicianNotes, estimatedDeliveryDate].some((v) => v !== undefined)) {
+          api.orders
+            .update(orderId, { priority, diagnosisNotes, technicianNotes, estimatedDeliveryDate })
+            .then(applyOrder)
+            .catch((e) => fail(e, 'Alteração não salva'));
+        }
+      }
+    },
+    [applyOrder, fail]
+  );
 
   const addServiceItem = useCallback(
     (orderId: string, serviceData: Omit<ServiceItem, 'id'>) => {
+      if (isApiMode) {
+        (async () => {
+          let dto = await api.orders.addService(orderId, {
+            title: serviceData.title,
+            description: serviceData.description,
+            laborPrice: serviceData.laborPrice,
+          });
+          for (const part of serviceData.partsUsed) {
+            dto = await api.orders.addPart(orderId, part.stockItemId, part.quantity);
+          }
+          applyOrder(dto);
+        })().catch((e) => fail(e, 'Serviço não adicionado'));
+        return;
+      }
       const newService: ServiceItem = {
         ...serviceData,
         id: 'srv-' + Date.now(),
@@ -487,12 +634,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         })
       );
     },
-    []
+    [applyOrder, fail]
   );
 
   const toggleServiceDone = useCallback(
     (orderId: string, serviceId: string) => {
       triggerHaptic();
+      if (isApiMode) {
+        const service = orders.find((o) => o.id === orderId)?.services.find((s) => s.id === serviceId);
+        if (service?.done) {
+          showToast({ title: 'Serviço já concluído', description: 'A conclusão fica registrada na linha do tempo.', type: 'info' });
+          return;
+        }
+        api.orders.markServiceDone(orderId, serviceId).then(applyOrder).catch((e) => fail(e, 'Não foi possível concluir o serviço'));
+        return;
+      }
       setOrders((prev) =>
         prev.map((order) => {
           if (order.id !== orderId) return order;
@@ -506,7 +662,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         })
       );
     },
-    [triggerHaptic]
+    [triggerHaptic, orders, showToast, applyOrder, fail]
   );
 
   const addOrderPhoto = useCallback(
@@ -550,6 +706,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const approveQuote = useCallback(
     (orderId: string) => {
       triggerHaptic();
+      if (isApiMode) {
+        api.orders
+          .approveQuote(orderId)
+          .then((dto) => {
+            applyOrder(dto);
+            showToast({ title: 'Orçamento aprovado', description: 'OS liberada para a bancada.', type: 'success' });
+          })
+          .catch((e) => fail(e, 'Não foi possível aprovar'));
+        return;
+      }
       try {
         confetti({
           particleCount: 70,
@@ -616,12 +782,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         type: 'success',
       });
     },
-    [triggerHaptic, updateStockQuantity, currentRole, showToast]
+    [triggerHaptic, updateStockQuantity, currentRole, showToast, applyOrder, fail]
   );
 
   const rejectQuote = useCallback(
     (orderId: string, reason: string) => {
       triggerHaptic();
+      if (isApiMode) {
+        api.orders
+          .rejectQuote(orderId, reason)
+          .then((dto) => {
+            applyOrder(dto);
+            showToast({ title: 'Recusa registrada', description: 'OS voltou para orçamento.', type: 'warning' });
+          })
+          .catch((e) => fail(e, 'Não foi possível registrar a recusa'));
+        return;
+      }
       setOrders((prev) =>
         prev.map((order) => {
           if (order.id !== orderId) return order;
@@ -657,12 +833,34 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         type: 'warning',
       });
     },
-    [triggerHaptic, currentRole, showToast]
+    [triggerHaptic, currentRole, showToast, applyOrder, fail]
   );
 
   const createOrder = useCallback(
-    (orderData: Partial<Order>, clientId: string, instrumentId: string) => {
+    async (orderData: Partial<Order>, clientId: string, instrumentId: string): Promise<Order> => {
       triggerHaptic();
+      if (isApiMode) {
+        try {
+          const dto = await api.orders.create({
+            customerId: clientId,
+            instrumentId,
+            priority: orderData.priority,
+            reportedIssue: orderData.reportedIssue || 'Revisão e regulagem geral',
+            estimatedDeliveryDate: orderData.estimatedDeliveryDate || undefined,
+            services: (orderData.services ?? []).map((s) => ({
+              title: s.title,
+              description: s.description,
+              laborPrice: s.laborPrice,
+            })),
+          });
+          const order = applyOrder(dto);
+          showToast({ title: `OS #${dto.orderNumber} aberta`, type: 'success' });
+          return order;
+        } catch (e) {
+          fail(e, 'Não foi possível abrir a OS');
+          throw e;
+        }
+      }
       const nextNumber = Math.max(...orders.map((o) => o.orderNumber), 1040) + 1;
       const client = clients.find((c) => c.id === clientId);
       const tokenInitials = client ? client.name.split(' ').map((n) => n[0]).join('').slice(0, 2) : 'OS';
@@ -731,12 +929,32 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       return newOrder;
     },
-    [orders, clients, currentRole, syncStatus, triggerHaptic, showToast]
+    [orders, clients, currentRole, syncStatus, triggerHaptic, showToast, applyOrder, fail]
   );
 
   const createClient = useCallback(
-    (clientData: Omit<Client, 'id' | 'createdAt'>) => {
+    async (clientData: Omit<Client, 'id' | 'createdAt'>): Promise<Client> => {
       triggerHaptic();
+      if (isApiMode) {
+        try {
+          const blank = (v?: string) => (v && v.trim() ? v.trim() : undefined);
+          const dto = await api.customers.create({
+            name: clientData.name,
+            phone: clientData.phone,
+            email: blank(clientData.email),
+            cpf: blank(clientData.cpf),
+            address: blank(clientData.address),
+            notes: blank(clientData.notes),
+          });
+          const created = mappers.toClient(dto);
+          setClients((prev) => [created, ...prev]);
+          showToast({ title: `Cliente ${created.name} cadastrado`, type: 'success' });
+          return created;
+        } catch (e) {
+          fail(e, 'Cliente não cadastrado');
+          throw e;
+        }
+      }
       const newClient: Client = {
         ...clientData,
         id: 'cli-' + Date.now(),
@@ -749,12 +967,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       });
       return newClient;
     },
-    [triggerHaptic, showToast]
+    [triggerHaptic, showToast, fail]
   );
 
   const createInstrument = useCallback(
-    (instrumentData: Omit<Instrument, 'id' | 'createdAt' | 'photos'>, photos: Photo[] = []) => {
+    async (instrumentData: Omit<Instrument, 'id' | 'createdAt' | 'photos'>, photos: Photo[] = []): Promise<Instrument> => {
       triggerHaptic();
+      if (isApiMode) {
+        try {
+          const { clientId, type, brand, model, ...details } = instrumentData;
+          const dto = await api.customers.addInstrument(clientId, { type, brand, model, ...details });
+          // Fotos ainda não têm endpoint no backend: ficam só neste dispositivo
+          const created = { ...mappers.toInstrument(dto), photos };
+          setInstruments((prev) => [created, ...prev]);
+          showToast({ title: `${created.brand} ${created.model} registrado`, type: 'success' });
+          return created;
+        } catch (e) {
+          fail(e, 'Instrumento não cadastrado');
+          throw e;
+        }
+      }
       const newInst: Instrument = {
         ...instrumentData,
         id: 'inst-' + Date.now(),
@@ -768,12 +1000,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       });
       return newInst;
     },
-    [triggerHaptic, showToast]
+    [triggerHaptic, showToast, fail]
   );
 
   const recordPayment = useCallback(
-    (paymentData: Omit<Payment, 'id' | 'receiptNumber'>) => {
+    async (paymentData: Omit<Payment, 'id' | 'receiptNumber'>): Promise<Payment> => {
       triggerHaptic();
+      if (isApiMode) {
+        try {
+          const dto = await api.orders.receivePayment(paymentData.orderId, paymentData.amount, paymentData.method);
+          applyOrder(dto);
+          const p = dto.payments[dto.payments.length - 1];
+          showToast({ title: `Pagamento de R$ ${paymentData.amount.toFixed(2)} registrado`, description: `Recibo ${p.receiptNumber}`, type: 'success' });
+          return { ...paymentData, id: p.id, receiptNumber: p.receiptNumber };
+        } catch (e) {
+          fail(e, 'Pagamento não registrado');
+          throw e;
+        }
+      }
       const receiptNumber = 'REC-2026-' + (payments.length + 100);
       const newPayment: Payment = {
         ...paymentData,
@@ -824,7 +1068,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       return newPayment;
     },
-    [payments.length, currentRole, triggerHaptic, showToast]
+    [payments.length, currentRole, triggerHaptic, showToast, applyOrder, fail]
   );
 
   const openCamera = useCallback((callback: (photoUrl: string, caption?: string) => void) => {
@@ -848,6 +1092,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, []);
 
   const resetToDefaults = useCallback(() => {
+    if (isApiMode) {
+      reloadData();
+      return;
+    }
     localStorage.removeItem('luthier_clients');
     localStorage.removeItem('luthier_instruments');
     localStorage.removeItem('luthier_orders');
@@ -864,7 +1112,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       title: 'Dados restaurados para o padrão de demonstração!',
       type: 'info',
     });
-  }, [showToast]);
+  }, [showToast, reloadData]);
 
   return (
     <AppContext.Provider
@@ -885,8 +1133,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         activeOrderId,
         isNewOrderWizardOpen,
         isWorkbenchModeOpen,
-        isDarkMode,
         toasts,
+        isLoadingData,
         isCameraModalOpen,
         cameraCallback,
         isBarcodeModalOpen,
@@ -900,7 +1148,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setActiveOrderId,
         setIsNewOrderWizardOpen,
         setIsWorkbenchModeOpen,
-        toggleDarkMode,
         toggleSyncStatus,
         triggerHaptic,
         showToast,
@@ -922,6 +1169,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         openBarcodeScanner,
         closeBarcodeScanner,
         resetToDefaults,
+        reloadData,
       }}
     >
       {children}

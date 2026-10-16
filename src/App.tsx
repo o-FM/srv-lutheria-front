@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { AuthProvider } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 import { AuthGuard } from './components/auth/AuthGuard';
 import { Header } from './components/common/Header';
+import { Sidebar } from './components/common/Sidebar';
 import { BottomTabBar } from './components/common/BottomTabBar';
 import { ToastContainer } from './components/common/ToastContainer';
 import { CameraModal } from './components/common/CameraModal';
@@ -20,41 +22,50 @@ import { ClientPortalView } from './components/client-portal/ClientPortalView';
 import { ReauthBottomSheet } from './components/auth/ReauthBottomSheet';
 import { AccountSettingsModal } from './components/auth/AccountSettingsModal';
 import { ForgotPasswordModal } from './components/auth/ForgotPasswordModal';
+import { AppearanceModal } from './components/settings/AppearanceModal';
+import { navItemsFor } from './config/navigation';
+import { usePathname } from './hooks/usePathname';
+import { CustomerPortalPage } from './pages/CustomerPortalPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
+import { RegisterWorkshopPage } from './pages/RegisterWorkshopPage';
 
 const MainLayout: React.FC = () => {
   const { activeTab, setActiveTab, currentRole } = useApp();
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const isStaff = currentRole !== 'cliente';
 
-  // Redirect away from restricted tabs
-  React.useEffect(() => {
-    if (currentRole === 'atendente' && activeTab === 'estoque') {
-      setActiveTab('os');
+  // Aba fora do alcance do papel (ex.: atendente em "Estoque") → primeira aba permitida
+  useEffect(() => {
+    const allowed = navItemsFor(currentRole);
+    if (isStaff && allowed.length && !allowed.some((i) => i.id === activeTab)) {
+      setActiveTab(allowed[0].id);
     }
-  }, [currentRole, activeTab, setActiveTab]);
+  }, [currentRole, activeTab, setActiveTab, isStaff]);
 
   return (
-    <div className="min-h-screen bg-stone-950 text-stone-100 flex flex-col font-sans transition-colors">
-      {/* Top Header */}
-      <Header />
+    <div className="min-h-dvh bg-base-950 text-base-100">
+      {isStaff && <Sidebar onOpenAppearance={() => setAppearanceOpen(true)} />}
 
-      {/* Main Content Area */}
-      <main className="flex-1 w-full max-w-7xl mx-auto px-3.5 py-4 sm:px-6">
-        {currentRole === 'cliente' ? (
-          <ClientPortalView />
-        ) : (
-          <>
-            {activeTab === 'hoje' && <HomeModule />}
-            {activeTab === 'os' && <OrdersModule />}
-            {activeTab === 'clientes' && <ClientsModule />}
-            {currentRole === 'luthier' && activeTab === 'estoque' && <StockModule />}
-            {activeTab === 'mais' && <MoreModule />}
-          </>
-        )}
-      </main>
+      <div className={isStaff ? 'lg:pl-64' : ''}>
+        <Header onOpenAppearance={() => setAppearanceOpen(true)} />
 
-      {/* Bottom Tab Bar (Thumb Zone) */}
+        <main className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-5 lg:py-8 pb-28 lg:pb-10">
+          {!isStaff ? (
+            <ClientPortalView />
+          ) : (
+            <>
+              {activeTab === 'hoje' && <HomeModule />}
+              {activeTab === 'os' && <OrdersModule />}
+              {activeTab === 'clientes' && <ClientsModule />}
+              {activeTab === 'estoque' && <StockModule />}
+              {activeTab === 'mais' && <MoreModule />}
+            </>
+          )}
+        </main>
+      </div>
+
       <BottomTabBar />
 
-      {/* Global Modals & Sheets */}
       <OrderDetailSheet />
       <NewOrderWizardModal />
       <WorkbenchModeModal />
@@ -65,18 +76,33 @@ const MainLayout: React.FC = () => {
       <ReauthBottomSheet />
       <AccountSettingsModal />
       <ForgotPasswordModal />
+      <AppearanceModal open={appearanceOpen} onClose={() => setAppearanceOpen(false)} />
     </div>
+  );
+};
+
+/** Rotas públicas (sem login) vêm antes do AuthGuard. */
+const Routes: React.FC = () => {
+  const path = usePathname();
+  const portal = path.match(/^\/acompanhar\/([A-Za-z0-9_-]+)\/?$/);
+  if (portal) return <CustomerPortalPage token={portal[1]} />;
+  if (path.startsWith('/redefinir-senha')) return <ResetPasswordPage />;
+  if (path.startsWith('/cadastro')) return <RegisterWorkshopPage />;
+  return (
+    <AuthGuard>
+      <MainLayout />
+    </AuthGuard>
   );
 };
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppProvider>
-        <AuthGuard>
-          <MainLayout />
-        </AuthGuard>
-      </AppProvider>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <AppProvider>
+          <Routes />
+        </AppProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

@@ -1,6 +1,13 @@
 /**
- * Auth API Client communicating with Express backend endpoints
+ * Fachada de autenticação usada pelo AuthContext e pelas telas de conta.
+ *
+ * - Modo API (VITE_API_URL definido): fala com o backend srv-luthieria (JWT + refresh token).
+ * - Modo demonstração: fala com o servidor mock local (server.ts), que simula personas.
  */
+import { isApiMode } from '../config/env';
+import { api, ApiError, tokenStore } from './api';
+import { toAuthUser } from './api/mappers';
+import type { Profile } from './api/types';
 
 export interface AuthUser {
   id: string;
@@ -8,8 +15,11 @@ export interface AuthUser {
   email: string;
   maskedCpf: string;
   phone: string;
-  role: 'luthier' | 'atendente' | 'cliente';
+  role: 'luthier' | 'atendente' | 'estoquista' | 'cliente';
   isAdmin?: boolean;
+  /** Só no modo API */
+  profile?: Profile;
+  tenantId?: string;
 }
 
 export interface LoginResponse {
@@ -37,7 +47,7 @@ export interface AuditLogItem {
   details?: string;
 }
 
-export const authApi = {
+const mockAuthApi = {
   async login(identifier: string, password: string, rememberMe: boolean): Promise<LoginResponse> {
     const res = await fetch('/api/auth/login', {
       method: 'POST',
@@ -190,3 +200,117 @@ export const authApi = {
   },
 };
 
+
+// ---------------------------------------------------------------------------
+// Modo API (backend srv-luthieria)
+// ---------------------------------------------------------------------------
+
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function requireEmail(identifier: string): string {
+  const email = identifier.trim().toLowerCase();
+  if (!EMAIL.test(email)) {
+    throw Object.assign(new Error('Use o e-mail cadastrado (login por CPF não está disponível).'), {
+      status: 400,
+    });
+  }
+  return email;
+}
+
+function rethrow(e: unknown): never {
+  if (e instanceof ApiError) {
+    throw Object.assign(new Error(e.message), {
+      status: e.status,
+      locked: e.status === 429,
+      remainingSeconds: e.retryAfterSeconds,
+    });
+  }
+  throw e;
+}
+
+/** Sessão aberta por outra tela (ex.: cadastro da luthieria): devolve o usuário já logado. */
+async function currentUser(): Promise<AuthUser> {
+  return toAuthUser(await api.users.me());
+}
+
+const backendAuthApi: typeof mockAuthApi = {
+  async login(identifier, password, rememberMe) {
+    try {
+      const tokens = await api.auth.login(requireEmail(identifier), password);
+      tokenStore.save(tokens, rememberMe);
+      const user = await currentUser();
+      return { token: tokens.accessToken, user, expiresAt: Date.now() + tokens.expiresIn * 1000 };
+    } catch (e) {
+      return rethrow(e);
+    }
+  },
+
+  /** Confere a senha abrindo uma sessão descartável (o backend não tem endpoint de reauth). */
+  async reauthenticate(_token, identifier, password, actionType) {
+    try {
+      const tokens = await api.auth.login(requireEmail(identifier), password);
+      await api.auth.logout(tokens.refreshToken).catch(() => undefined);
+      const user = await currentUser();
+      if (actionType === 'SENSITIVE_UPDATE' && user.email !== identifier.trim().toLowerCase()) {
+        throw Object.assign(new Error('As credenciais não são da conta atual.'), { status: 401 });
+      }
+      return { success: true, ticket: `verified-${Date.now()}`, targetUser: user, expiresInSeconds: 300 };
+    } catch (e) {
+      return rethrow(e);
+    }
+  },
+
+  async switchProfile() {
+    throw new Error('Para usar outro perfil, saia e entre com a conta desejada.');
+  },
+
+  async updateSensitiveData() {
+    throw new Error('Alteração de dados pela conta ainda não está disponível na API.');
+  },
+
+  async getMe() {
+    return currentUser();
+  },
+
+  async logout() {
+    const refreshToken = tokenStore.refresh;
+    tokenStore.clear();
+    if (refreshToken) {
+      await api.auth.logout(refreshToken).catch(() => undefined);
+    }
+  },
+
+  async forgotPassword(identifier) {
+    try {
+      await api.auth.forgotPassword(requireEmail(identifier));
+      return {
+        message: 'Se o e-mail estiver cadastrado, enviaremos um link válido por 30 minutos.',
+      };
+    } catch (e) {
+      return rethrow(e);
+    }
+  },
+
+  async getAuditLogs() {
+    const page = await api.audit.list();
+    return page.content.map((a) => ({
+      id: a.id,
+      timestamp: a.timestamp,
+      action: a.action,
+      maskedIdentifier: a.actor,
+      result: a.action.endsWith('FAILED') ? ('FAILED' as const) : ('SUCCESS' as const),
+      ip: a.ip ?? '',
+      details: [a.resourceType, a.details].filter(Boolean).join(' · ') || undefined,
+    }));
+  },
+
+  async getPermissions() {
+    return undefined;
+  },
+
+  async validateAction() {
+    return true;
+  },
+};
+
+export const authApi = isApiMode ? backendAuthApi : mockAuthApi;

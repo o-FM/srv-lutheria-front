@@ -100,6 +100,37 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
     canViewAuditLogs: false,
   },
 
+  estoquista: {
+    role: 'estoquista',
+    roleLabel: 'Estoquista',
+    roleBadge: 'ESTOQUE',
+    roleDescription: 'Cadastro de peças, entradas, saídas e inventário.',
+
+    canAccessToday: true,
+    canAccessOrders: false,
+    canAccessClients: false,
+    canAccessStock: true,
+    canAccessAgenda: false,
+    canAccessFinancials: false,
+    canAccessMessages: false,
+    canAccessConfig: false,
+    canAccessWorkbench: false,
+    canAccessClientPortal: false,
+
+    canOpenOrder: false,
+    canRegisterClient: false,
+    canRegisterEntryPhoto: false,
+    canRegisterDelivery: false,
+    canExecuteBenchDiagnosis: false,
+    canExecuteBenchLabor: false,
+    canModifyPricingAndParts: false,
+    canApproveClientQuote: false,
+    canManageInventory: true,
+    canViewFinancialTotals: false,
+    canResetDemoData: false,
+    canViewAuditLogs: false,
+  },
+
   cliente: {
     role: 'cliente',
     roleLabel: 'Cliente / Músico',

@@ -7,6 +7,9 @@ import React, {
   ReactNode,
 } from 'react';
 import { AuthUser, authApi } from '../services/authApi';
+import { isApiMode } from '../config/env';
+import { setSessionExpiredHandler, tokenStore } from '../services/api';
+import type { TokenResponse } from '../services/api';
 import { UserRole } from '../types';
 
 interface ReauthModalState {
@@ -41,6 +44,8 @@ interface AuthContextType {
   isForgotPasswordOpen: boolean;
   setIsForgotPasswordOpen: (open: boolean) => void;
   updateUserInMemory: (user: AuthUser) => void;
+  /** Modo API: entra com tokens já emitidos (ex.: logo após cadastrar a oficina). */
+  adoptSession: (tokens: TokenResponse) => Promise<AuthUser>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -49,6 +54,7 @@ const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes of inactivity
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [token, setToken] = useState<string | null>(() => {
+    if (isApiMode) return tokenStore.access;
     return localStorage.getItem('luthier_auth_token') || sessionStorage.getItem('luthier_auth_token');
   });
 
@@ -67,6 +73,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     title: 'Confirme sua Identidade',
     description: 'Digite seu E-mail ou CPF e senha para continuar.',
   });
+
+  // Modo API: se a renovação do token falhar, volta para o login
+  useEffect(() => {
+    if (!isApiMode) return;
+    setSessionExpiredHandler(() => {
+      localStorage.removeItem('luthier_auth_user');
+      sessionStorage.removeItem('luthier_auth_user');
+      setToken(null);
+      setUser(null);
+    });
+    return () => setSessionExpiredHandler(null);
+  }, []);
 
   // Verify session on mount with server
   useEffect(() => {
@@ -131,7 +149,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setToken(res.token);
       setUser(res.user);
 
-      if (remember) {
+      if (isApiMode) {
+        (remember ? localStorage : sessionStorage).setItem('luthier_auth_user', JSON.stringify(res.user));
+      } else if (remember) {
         localStorage.setItem('luthier_auth_token', res.token);
         localStorage.setItem('luthier_auth_user', JSON.stringify(res.user));
       } else {
@@ -221,6 +241,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     [token]
   );
 
+  const adoptSession = useCallback(async (tokens: TokenResponse): Promise<AuthUser> => {
+    tokenStore.save(tokens, true);
+    const me = await authApi.getMe(tokens.accessToken);
+    localStorage.setItem('luthier_auth_user', JSON.stringify(me));
+    setToken(tokens.accessToken);
+    setUser(me);
+    return me;
+  }, []);
+
   const updateUserInMemory = useCallback((updated: AuthUser) => {
     setUser(updated);
     if (localStorage.getItem('luthier_auth_user')) {
@@ -250,6 +279,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         isForgotPasswordOpen,
         setIsForgotPasswordOpen,
         updateUserInMemory,
+        adoptSession,
       }}
     >
       {children}
