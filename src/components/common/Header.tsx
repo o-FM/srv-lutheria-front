@@ -2,7 +2,7 @@ import React from 'react';
 import { Hammer, Moon, RefreshCw, Search, Sun, Wifi, WifiOff } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useTheme } from '../../context/ThemeContext';
-import { navTitle } from '../../config/navigation';
+import { navShortTitle, navTitle } from '../../config/navigation';
 import { isApiMode } from '../../config/env';
 import { getRolePermissions } from '../../utils/permissions';
 import { BrandMark } from './BrandMark';
@@ -37,7 +37,14 @@ export const Header: React.FC<{ onOpenAppearance: () => void }> = ({ onOpenAppea
         </div>
 
         <h1 className="flex-1 min-w-0 text-base lg:text-lg font-semibold text-base-50 truncate">
-          {isStaff ? navTitle(activeTab) : 'Acompanhe seu instrumento'}
+          {isStaff ? (
+            <>
+              <span className="sm:hidden">{navShortTitle(activeTab)}</span>
+              <span className="hidden sm:inline">{navTitle(activeTab)}</span>
+            </>
+          ) : (
+            'Acompanhe seu instrumento'
+          )}
         </h1>
 
         {isLoadingData && <RefreshCw className="w-4 h-4 text-base-500 animate-spin" aria-label="Carregando" />}

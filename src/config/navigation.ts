@@ -36,3 +36,8 @@ export function navItemsFor(role: UserRole): NavItem[] {
 export function navTitle(tab: string): string {
   return ALL.find((i) => i.id === tab)?.title ?? '';
 }
+
+/** Título curto para telas pequenas (cabeçalho do celular). */
+export function navShortTitle(tab: string): string {
+  return ALL.find((i) => i.id === tab)?.label ?? '';
+}
