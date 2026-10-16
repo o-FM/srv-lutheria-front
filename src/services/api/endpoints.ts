@@ -38,8 +38,9 @@ import type { OrderStatus, StockCategory } from '../../types';
 const id = (value: string) => encodeURIComponent(value);
 
 export const authEndpoints = {
-  login: (email: string, password: string) =>
-    http.post<TokenResponse>('/auth/login', { email, password }, { auth: false }),
+  /** identifier: e-mail ou CPF (só dígitos). */
+  login: (identifier: string, password: string) =>
+    http.post<TokenResponse>('/auth/login', { identifier, password }, { auth: false }),
   register: (body: RegisterWorkshopRequest) =>
     http.post<TokenResponse>('/auth/register', body, { auth: false }),
   logout: (refreshToken: string) =>
@@ -72,6 +73,9 @@ export const customerEndpoints = {
     http.put<CustomerDto>(`/customers/${id(customerId)}`, body),
   deactivate: (customerId: string) => http.delete<void>(`/customers/${id(customerId)}`),
   anonymize: (customerId: string) => http.post<void>(`/customers/${id(customerId)}/anonymize`),
+  /** Gera um novo código da área do cliente (revoga o anterior) e envia pelo WhatsApp. */
+  sendAccessCode: (customerId: string) =>
+    http.post<NotificationDto>(`/customers/${id(customerId)}/access-code`),
   instruments: (customerId: string) =>
     http.get<InstrumentDto[]>(`/customers/${id(customerId)}/instruments`),
   allInstruments: () => fetchAll<InstrumentDto>('/instruments'),
@@ -145,12 +149,10 @@ export const portalEndpoints = {
     http.post<PortalOrderDto>(`/portal/orders/${id(token)}/quote/reject`, { reason }, { auth: false }),
 };
 
-/** Área do cliente: login por telefone + código do WhatsApp; demais rotas com o token do cliente. */
+/** Área do cliente: login só com o código do WhatsApp; demais rotas com o token do cliente. */
 export const clientEndpoints = {
-  requestCode: (workshop: string, phone: string) =>
-    http.post<void>('/auth/customer/request-code', { workshop, phone }, { auth: false }),
-  login: (workshop: string, phone: string, code: string) =>
-    http.post<TokenResponse>('/auth/customer/login', { workshop, phone, code }, { auth: false }),
+  login: (code: string) =>
+    http.post<TokenResponse>('/auth/customer/login', { code }, { auth: false }),
   me: (token: string) => http.get<{ id: string; name: string }>('/client/me', { bearer: token }),
   orders: (token: string) => http.get<PortalOrderDto[]>('/client/orders', { bearer: token }),
   approve: (token: string, orderId: string) =>

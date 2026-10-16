@@ -212,11 +212,30 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 function requireEmail(identifier: string): string {
   const email = identifier.trim().toLowerCase();
   if (!EMAIL.test(email)) {
-    throw Object.assign(new Error('Use o e-mail cadastrado (login por CPF não está disponível).'), {
-      status: 400,
-    });
+    throw Object.assign(new Error('Informe o e-mail cadastrado.'), { status: 400 });
   }
   return email;
+}
+
+/** Login dos profissionais: e-mail ou CPF (com ou sem máscara). */
+function loginIdentifier(identifier: string): string {
+  const value = identifier.trim();
+  if (value.includes('@')) return requireEmail(value);
+  const cpf = value.replace(/\D/g, '');
+  if (cpf.length !== 11) {
+    throw Object.assign(new Error('Informe o e-mail ou o CPF cadastrado.'), { status: 400 });
+  }
+  return cpf;
+}
+
+/** "sub" do JWT (e-mail do usuário), sem validar a assinatura: só para comparar contas. */
+function tokenSubject(token: string): string | undefined {
+  try {
+    const payload = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(atob(payload)).sub;
+  } catch {
+    return undefined;
+  }
 }
 
 function rethrow(e: unknown): never {
@@ -238,7 +257,7 @@ async function currentUser(): Promise<AuthUser> {
 const backendAuthApi: typeof mockAuthApi = {
   async login(identifier, password, rememberMe) {
     try {
-      const tokens = await api.auth.login(requireEmail(identifier), password);
+      const tokens = await api.auth.login(loginIdentifier(identifier), password);
       tokenStore.save(tokens, rememberMe);
       const user = await currentUser();
       return { token: tokens.accessToken, user, expiresAt: Date.now() + tokens.expiresIn * 1000 };
@@ -250,10 +269,10 @@ const backendAuthApi: typeof mockAuthApi = {
   /** Confere a senha abrindo uma sessão descartável (o backend não tem endpoint de reauth). */
   async reauthenticate(_token, identifier, password, actionType) {
     try {
-      const tokens = await api.auth.login(requireEmail(identifier), password);
+      const tokens = await api.auth.login(loginIdentifier(identifier), password);
       await api.auth.logout(tokens.refreshToken).catch(() => undefined);
       const user = await currentUser();
-      if (actionType === 'SENSITIVE_UPDATE' && user.email !== identifier.trim().toLowerCase()) {
+      if (actionType === 'SENSITIVE_UPDATE' && tokenSubject(tokens.accessToken) !== user.email) {
         throw Object.assign(new Error('As credenciais não são da conta atual.'), { status: 401 });
       }
       return { success: true, ticket: `verified-${Date.now()}`, targetUser: user, expiresInSeconds: 300 };

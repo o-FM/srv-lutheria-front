@@ -215,7 +215,7 @@ export const LoginPage: React.FC = () => {
               htmlFor="auth-identifier"
               className="block text-xs font-semibold text-base-300 uppercase tracking-wider mb-1.5"
             >
-              {isApiMode ? 'E-mail' : 'E-mail ou CPF'}
+              E-mail ou CPF
             </label>
             <div className="relative">
               <input
@@ -229,7 +229,7 @@ export const LoginPage: React.FC = () => {
                 value={identifier}
                 onChange={handleIdentifierChange}
                 onBlur={handleIdentifierBlur}
-                placeholder={isApiMode ? 'seu.email@exemplo.com' : 'seu.email@exemplo.com ou 000.000.000-00'}
+                placeholder="seu.email@exemplo.com ou 000.000.000-00"
                 aria-describedby={fieldError ? 'identifier-error' : undefined}
                 aria-invalid={!!fieldError}
                 className={`w-full px-4 py-3.5 bg-base-900 border rounded-2xl text-base text-base-100 placeholder-base-500 focus:outline-none transition-colors ${

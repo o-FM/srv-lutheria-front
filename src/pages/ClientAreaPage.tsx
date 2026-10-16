@@ -1,38 +1,48 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, ChevronRight, Loader2, LogOut, MessageCircle } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Loader2, LogOut } from 'lucide-react';
 import { Field, PublicLayout, inputClass, primaryButton } from './PublicLayout';
 import { OrderStatusView } from './OrderStatusView';
 import { isApiMode } from '../config/env';
 import { api, ApiError } from '../services/api';
 import type { PortalOrderDto } from '../services/api';
 
-const storageKey = (workshop: string) => `luthier_client_session:${workshop}`;
+const STORAGE_KEY = 'luthier_client_session';
+
+/** Mesmo alfabeto do backend: sem 0/O, 1/I/L e U, para não confundir ao digitar. */
+const CODE_CHARS = /[^23456789ABCDEFGHJKMNPQRSTVWXYZ]/g;
+const CODE_LENGTH = 8;
 
 interface ClientSession {
   token: string;
   expiresAt: number;
 }
 
-function loadSession(workshop: string): ClientSession | null {
+function loadSession(): ClientSession | null {
   try {
-    const s = JSON.parse(localStorage.getItem(storageKey(workshop)) ?? 'null') as ClientSession | null;
+    const s = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null') as ClientSession | null;
     return s && s.expiresAt > Date.now() ? s : null;
   } catch {
     return null;
   }
 }
 
+/** "k7qm4xpa" → "K7QM-4XPA" (aceita colar com espaço, traço ou minúsculas). */
+export function formatAccessCode(value: string): string {
+  const raw = value.toUpperCase().replace(CODE_CHARS, '').slice(0, CODE_LENGTH);
+  return raw.length > 4 ? `${raw.slice(0, 4)}-${raw.slice(4)}` : raw;
+}
+
 /**
- * Área do cliente: /cliente/{oficina}. Link enviado automaticamente pelo WhatsApp quando a OS é
- * aberta, junto com o código de acesso. Login = telefone + código (sem senha).
+ * Área do cliente: /cliente. Link enviado automaticamente pelo WhatsApp quando a OS é aberta,
+ * junto com o código de acesso. Login = só o código (XXXX-XXXX), sem telefone nem senha.
  */
-export const ClientAreaPage: React.FC<{ workshop: string }> = ({ workshop }) => {
-  const [session, setSession] = useState<ClientSession | null>(() => loadSession(workshop));
+export const ClientAreaPage: React.FC = () => {
+  const [session, setSession] = useState<ClientSession | null>(loadSession);
 
   const logout = useCallback(() => {
-    localStorage.removeItem(storageKey(workshop));
+    localStorage.removeItem(STORAGE_KEY);
     setSession(null);
-  }, [workshop]);
+  }, []);
 
   if (!isApiMode) {
     return (
@@ -46,59 +56,34 @@ export const ClientAreaPage: React.FC<{ workshop: string }> = ({ workshop }) => 
     <ClientOrders token={session.token} onLogout={logout} />
   ) : (
     <ClientLogin
-      workshop={workshop}
       onLogin={(s) => {
-        localStorage.setItem(storageKey(workshop), JSON.stringify(s));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
         setSession(s);
       }}
     />
   );
 };
 
-const ClientLogin: React.FC<{ workshop: string; onLogin: (s: ClientSession) => void }> = ({ workshop, onLogin }) => {
-  const [phone, setPhone] = useState('');
+const ClientLogin: React.FC<{ onLogin: (s: ClientSession) => void }> = ({ onLogin }) => {
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
-
-  const formatPhone = (v: string) => {
-    const d = v.replace(/\D/g, '').slice(0, 11);
-    if (d.length <= 2) return d;
-    if (d.length <= 7) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
-    return `(${d.slice(0, 2)}) ${d.slice(2, d.length - 4)}-${d.slice(-4)}`;
-  };
+  const complete = code.replace('-', '').length === CODE_LENGTH;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!complete) return;
     setBusy(true);
     setError(null);
     try {
-      const t = await api.client.login(workshop, phone, code);
+      const t = await api.client.login(code);
       onLogin({ token: t.accessToken, expiresAt: Date.now() + t.expiresIn * 1000 });
     } catch (err) {
       setError(
         err instanceof ApiError && err.status === 401
-          ? 'Código inválido ou expirado. Peça um novo código abaixo.'
+          ? 'Código inválido ou expirado. Confira a última mensagem da oficina no WhatsApp.'
           : (err as Error).message
       );
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const requestCode = async () => {
-    setError(null);
-    if (phone.replace(/\D/g, '').length < 10) {
-      setError('Informe o telefone com DDD.');
-      return;
-    }
-    setBusy(true);
-    try {
-      await api.client.requestCode(workshop, phone);
-      setInfo('Se o telefone estiver cadastrado na oficina, você vai receber um novo código no WhatsApp em instantes (válido por 10 minutos).');
-    } catch (err) {
-      setError((err as Error).message);
     } finally {
       setBusy(false);
     }
@@ -110,45 +95,34 @@ const ClientLogin: React.FC<{ workshop: string; onLogin: (s: ClientSession) => v
         <div>
           <h1 className="text-xl font-semibold text-base-50">Acompanhe seus instrumentos</h1>
           <p className="text-sm text-base-400 mt-1">
-            Use o telefone cadastrado na oficina e o código que enviamos pelo WhatsApp.
+            Digite o código de acesso que a oficina enviou pelo WhatsApp.
           </p>
         </div>
-        <Field label="Telefone (WhatsApp)">
-          <input
-            type="tel"
-            inputMode="numeric"
-            autoComplete="tel"
-            className={inputClass}
-            placeholder="(11) 98765-4321"
-            value={phone}
-            onChange={(e) => setPhone(formatPhone(e.target.value))}
-            required
-          />
-        </Field>
         <Field label="Código de acesso" error={error ?? undefined}>
           <input
-            inputMode="numeric"
+            autoFocus
             autoComplete="one-time-code"
-            className={`${inputClass} tracking-[0.4em] font-mono text-lg`}
-            placeholder="••••••"
-            maxLength={6}
+            autoCapitalize="characters"
+            autoCorrect="off"
+            spellCheck={false}
+            aria-label="Código de acesso"
+            className={`${inputClass} text-center tracking-[0.3em] font-mono text-xl uppercase`}
+            placeholder="XXXX-XXXX"
+            maxLength={CODE_LENGTH + 1}
             value={code}
-            onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            onChange={(e) => {
+              setError(null);
+              setCode(formatAccessCode(e.target.value));
+            }}
             required
           />
         </Field>
-        {info && <p className="text-sm text-emerald-400">{info}</p>}
-        <button type="submit" disabled={busy || code.length !== 6} className={primaryButton}>
+        <button type="submit" disabled={busy || !complete} className={primaryButton}>
           {busy && <Loader2 className="w-4 h-4 animate-spin" />} Entrar
         </button>
-        <button
-          type="button"
-          onClick={requestCode}
-          disabled={busy}
-          className="w-full h-11 rounded-xl border border-base-700 text-sm text-base-200 hover:bg-base-900 flex items-center justify-center gap-2"
-        >
-          <MessageCircle className="w-4 h-4" /> Receber novo código
-        </button>
+        <p className="text-xs text-base-500 text-center">
+          O código vale por 90 dias e muda a cada nova OS. Perdeu? Peça à oficina para reenviar.
+        </p>
       </form>
     </PublicLayout>
   );

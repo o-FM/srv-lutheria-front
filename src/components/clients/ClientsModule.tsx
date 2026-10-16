@@ -14,8 +14,12 @@ import {
   CheckCircle2,
   Calendar,
   Sparkles,
+  KeyRound,
+  Loader2,
 } from 'lucide-react';
 import { Client, Instrument, InstrumentType } from '../../types';
+import { isApiMode } from '../../config/env';
+import { api } from '../../services/api';
 
 export const ClientsModule: React.FC = () => {
   const {
@@ -32,6 +36,24 @@ export const ClientsModule: React.FC = () => {
   } = useApp();
 
   const [search, setSearch] = useState('');
+  const [sendingCode, setSendingCode] = useState(false);
+
+  /** Cliente perdeu o código: gera outro e envia pelo WhatsApp (o anterior deixa de valer). */
+  const sendAccessCode = async (clientId: string) => {
+    setSendingCode(true);
+    try {
+      const n = await api.customers.sendAccessCode(clientId);
+      showToast(
+        n.status === 'enviado'
+          ? { title: 'Código enviado', description: 'O cliente recebeu um novo código pelo WhatsApp.', type: 'success' }
+          : { title: 'Código gerado, mas não enviado', description: n.error ?? 'WhatsApp indisponível.', type: 'error' }
+      );
+    } catch (e) {
+      showToast({ title: 'Não foi possível enviar', description: (e as Error).message, type: 'error' });
+    } finally {
+      setSendingCode(false);
+    }
+  };
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
 
   // New Client Form
@@ -332,6 +354,18 @@ export const ClientsModule: React.FC = () => {
                   </span>
                   {selectedClient.notes}
                 </div>
+              )}
+
+              {isApiMode && (
+                <button
+                  type="button"
+                  disabled={sendingCode}
+                  onClick={() => sendAccessCode(selectedClient.id)}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-base-800 text-xs font-semibold text-base-200 hover:bg-base-950 disabled:opacity-60"
+                >
+                  {sendingCode ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <KeyRound className="w-3.5 h-3.5" />}
+                  Enviar código de acesso
+                </button>
               )}
             </div>
 

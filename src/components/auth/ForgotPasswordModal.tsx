@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { authApi } from '../../services/authApi';
+import { isApiMode } from '../../config/env';
 import { formatCpf, cleanCpf } from '../../utils/cpfValidator';
 import { KeyRound, X, Mail, CheckCircle2, AlertCircle } from 'lucide-react';
 
@@ -100,14 +101,14 @@ export const ForgotPasswordModal: React.FC = () => {
 
               <div>
                 <label className="text-[11px] uppercase font-semibold text-base-400 block mb-1">
-                  E-mail ou CPF
+                  {isApiMode ? 'E-mail' : 'E-mail ou CPF'}
                 </label>
                 <input
                   type="text"
                   autoFocus
                   value={identifier}
                   onChange={handleIdentifierChange}
-                  placeholder="seu.email@exemplo.com ou 000.000.000-00"
+                  placeholder={isApiMode ? 'seu.email@exemplo.com' : 'seu.email@exemplo.com ou 000.000.000-00'}
                   className="w-full px-3 py-2.5 bg-base-950 border border-base-800 rounded-xl text-xs text-base-50 focus:outline-none focus:border-accent-500"
                 />
               </div>

@@ -49,7 +49,7 @@ src/
 
 | Tela / ação | Endpoint |
 |---|---|
-| Login, sair, "esqueci minha senha" | `/auth/login`, `/auth/logout`, `/auth/forgot-password` |
+| Login (e-mail ou CPF), sair, "esqueci minha senha" | `/auth/login`, `/auth/logout`, `/auth/forgot-password` |
 | Cadastro da oficina (`/cadastro`) | `POST /auth/register` |
 | Redefinir senha (`/redefinir-senha#token=`) | `POST /auth/reset-password` |
 | Usuário logado | `GET /users/me` |
@@ -63,7 +63,8 @@ src/
 | Pagamento | `POST /service-orders/{id}/payments` |
 | Estoque +1/−1 | `POST /products/{id}/movements` |
 | Portal do cliente (`/acompanhar/{token}`) | `/portal/orders/{token}` (+ approve/reject) |
-| Área do cliente (`/cliente/{oficina}`) | `/auth/customer/login`, `/auth/customer/request-code`, `/client/orders` (+ approve/reject) |
+| Área do cliente (`/cliente`) | `/auth/customer/login`, `/client/orders` (+ approve/reject) |
+| Ficha do cliente → "Enviar código de acesso" | `POST /customers/{id}/access-code` |
 | Logs de auditoria (admin) | `GET /audit-logs` |
 
 Também prontos no cliente, para as próximas telas: catálogo de serviços, relatórios
@@ -76,10 +77,11 @@ alteração de dados da própria conta e o simulador offline.
 ## Área do cliente
 
 Quando a oficina abre uma OS, o backend envia **automaticamente pelo WhatsApp** o link
-`/cliente/{oficina}` e um código de acesso de 6 dígitos (uso único, 72h). O cliente entra com
-telefone + código — sem senha — e vê todas as OS dele naquela oficina, com andamento, orçamento
-(aprovar/recusar) e histórico. Se o código expirar, "Receber novo código" envia outro (10 min).
-A sessão do cliente é separada da sessão do balcão.
+`/cliente` e um código de acesso amigável no formato `K7QM-4XPA` (sem letras/números que se
+confundem). O cliente digita **só o código** — sem telefone, sem senha — e vê todas as OS dele
+naquela oficina, com andamento, orçamento (aprovar/recusar) e histórico. O código vale por 90 dias
+e pode ser usado várias vezes; cada OS nova troca o código. Se o cliente perder, o balcão usa
+"Enviar código de acesso" na ficha do cliente. A sessão do cliente é separada da sessão do balcão.
 
 ## Aparência
 

@@ -87,8 +87,8 @@ const Routes: React.FC = () => {
   const path = usePathname();
   const portal = path.match(/^\/acompanhar\/([A-Za-z0-9_-]+)\/?$/);
   if (portal) return <CustomerPortalPage token={portal[1]} />;
-  const clientArea = path.match(/^\/cliente\/([a-z0-9-]+)\/?$/);
-  if (clientArea) return <ClientAreaPage workshop={clientArea[1]} />;
+  // /cliente (link atual) e /cliente/{oficina} (links antigos): o código já identifica a oficina
+  if (/^\/cliente(\/[a-z0-9-]+)?\/?$/.test(path)) return <ClientAreaPage />;
   if (path.startsWith('/redefinir-senha')) return <ResetPasswordPage />;
   if (path.startsWith('/cadastro')) return <RegisterWorkshopPage />;
   return (
