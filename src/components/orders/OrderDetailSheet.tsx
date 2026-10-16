@@ -146,23 +146,27 @@ export const OrderDetailSheet: React.FC = () => {
     window.open(`https://wa.me/55${phoneClean}?text=${message}`, '_blank');
   };
 
-  const handleSavePayment = () => {
+  const handleSavePayment = async () => {
     const val = parseFloat(paymentAmount);
     if (!val || val <= 0) {
       showToast({ title: 'Informe um valor válido', type: 'warning' });
       return;
     }
-    recordPayment({
-      orderId: order.id,
-      clientId: order.clientId,
-      orderNumber: order.orderNumber,
-      clientName: client?.name || 'Cliente',
-      instrumentDescription: `${instrument?.brand} ${instrument?.model}`,
-      amount: val,
-      method: paymentMethod,
-      date: new Date().toISOString().replace('T', ' ').substring(0, 16),
-      status: 'concluido',
-    });
+    try {
+      await recordPayment({
+        orderId: order.id,
+        clientId: order.clientId,
+        orderNumber: order.orderNumber,
+        clientName: client?.name || 'Cliente',
+        instrumentDescription: `${instrument?.brand} ${instrument?.model}`,
+        amount: val,
+        method: paymentMethod,
+        date: new Date().toISOString().replace('T', ' ').substring(0, 16),
+        status: 'concluido',
+      });
+    } catch {
+      return; // erro já exibido em toast; mantém o formulário aberto para corrigir o valor
+    }
     setIsPaymentModalOpen(false);
     setPaymentAmount('');
   };

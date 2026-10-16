@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "tsx server.ts",
     "dev:vite": "vite --port 5173",
+    "dev:api": "vite --port 3000 --strictPort --mode api",
+    "seed:api": "tsx scripts/seed-api.ts",
     "start": "tsx server.ts",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",

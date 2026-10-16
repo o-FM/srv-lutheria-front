@@ -246,7 +246,7 @@ export const ReauthBottomSheet: React.FC = () => {
             <div className="p-2.5 rounded-xl bg-base-950/60 border border-base-800/80 text-[11px] text-base-400">
               <span className="font-semibold text-base-300">Senhas de teste: </span>
               Luthier: <code className="text-accent-400 font-mono">Luthier@2026</code> ·
-              Balcão: <code className="text-accent-400 font-mono">Balcao@2026</code> ·
+              Balcão: <code className="text-accent-400 font-mono">Balcao@2026!</code> ·
               Cliente: <code className="text-accent-400 font-mono">Cliente@2026</code>
             </div>
 

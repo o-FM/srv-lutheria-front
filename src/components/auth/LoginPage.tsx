@@ -358,7 +358,7 @@ export const LoginPage: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={() => handleFillDemo('mariana.balcao@oficina.com', 'Balcao@2026')}
+              onClick={() => handleFillDemo('mariana.balcao@oficina.com', 'Balcao@2026!')}
               className="p-2 rounded-xl bg-base-900 border border-base-800 hover:border-accent-600/60 text-xs transition-colors"
             >
               <span className="text-[10px] text-accent-400 block font-semibold">Atendente</span>

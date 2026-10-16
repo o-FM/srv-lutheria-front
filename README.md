@@ -13,8 +13,9 @@ npm install
 npm run dev                     # http://localhost:3000
 
 # Com a API real (srv-lutheria rodando em :8080)
-echo "VITE_API_URL=http://localhost:8080" > .env.local
-npm run dev:vite                # http://localhost:5173
+npm run seed:api                # opcional: dados de demonstração via API (ver abaixo)
+npm run dev:api                 # http://localhost:3000 → http://localhost:8080 (lê .env.api)
+# ou: echo "VITE_API_URL=http://localhost:8080" > .env.local && npm run dev:vite  (:5173)
 
 npm run build                   # checagem de tipos + build de produção em dist/
 ```
@@ -22,6 +23,32 @@ npm run build                   # checagem de tipos + build de produção em dis
 O modo é decidido por `VITE_API_URL` (`src/config/env.ts`): vazio → demonstração; preenchido →
 API. Em produção o `dist/` é estático e pode ser servido por qualquer CDN/servidor web, com
 fallback de rotas para `index.html` (rotas públicas abaixo).
+
+## Teste e2e local (front + API)
+
+```bash
+# 1. Backend: perfil dev = H2 em memória, porta 8080, CORS liberado para :3000 e :5173
+cd srv-lutheria && mvn install -DskipTests
+java -jar srv-luthier-app/target/srv-luthier-app-1.0.0-SNAPSHOT.jar
+
+# 2. Dados de demonstração (idempotente; API_URL=http://... para outra URL)
+cd srv-lutheria-front && npm install && npm run seed:api
+
+# 3. Front apontando para http://localhost:8080 (sem o mock do server.ts)
+npm run dev:api
+```
+
+O seed (`scripts/seed-api.ts`) usa só a API pública: cadastra a oficina e a atendente e depois
+estoque, clientes, instrumentos e OS a partir de `src/data/seedData.ts`. As contas são as mesmas
+dos botões "Contas de Teste" do login:
+
+| Perfil | Login | Senha |
+|---|---|---|
+| Luthier / Dono (ADMIN) | `armando.luthier@oficina.com` ou CPF `123.456.789-09` | `Luthier@2026` |
+| Atendente | `mariana.balcao@oficina.com` | `Balcao@2026!` |
+
+Área do cliente (`/cliente`): em Clientes, envie o código de acesso. Em dev o WhatsApp fica
+desligado e o código aparece no log da API (`[DEV] Código de acesso do cliente`).
 
 ## Estrutura
 
