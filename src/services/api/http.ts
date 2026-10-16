@@ -98,6 +98,8 @@ interface RequestOptions {
   query?: Record<string, string | number | boolean | null | undefined>;
   /** false para rotas públicas (login, portal do cliente). */
   auth?: boolean;
+  /** Token próprio (área do cliente): não usa a sessão do balcão nem tenta renovar. */
+  bearer?: string;
   signal?: AbortSignal;
 }
 
@@ -137,10 +139,11 @@ function buildUrl(path: string, query?: RequestOptions['query']): string {
 
 export async function request<T>(method: Method, path: string, options: RequestOptions = {},
   retried = false): Promise<T> {
-  const { body, query, auth = true, signal } = options;
+  const { body, query, auth = true, signal, bearer } = options;
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
-  if (auth && tokenStore.access) headers.Authorization = `Bearer ${tokenStore.access}`;
+  if (bearer) headers.Authorization = `Bearer ${bearer}`;
+  else if (auth && tokenStore.access) headers.Authorization = `Bearer ${tokenStore.access}`;
 
   let res: Response;
   try {
@@ -155,7 +158,7 @@ export async function request<T>(method: Method, path: string, options: RequestO
     throw new ApiError({ status: 0, title: 'Network Error' });
   }
 
-  if (res.status === 401 && auth && !retried) {
+  if (res.status === 401 && auth && !bearer && !retried) {
     if (await refreshSession()) {
       return request<T>(method, path, options, true);
     }

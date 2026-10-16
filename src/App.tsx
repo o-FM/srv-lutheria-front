@@ -26,6 +26,7 @@ import { AppearanceModal } from './components/settings/AppearanceModal';
 import { navItemsFor } from './config/navigation';
 import { usePathname } from './hooks/usePathname';
 import { CustomerPortalPage } from './pages/CustomerPortalPage';
+import { ClientAreaPage } from './pages/ClientAreaPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { RegisterWorkshopPage } from './pages/RegisterWorkshopPage';
 
@@ -86,6 +87,8 @@ const Routes: React.FC = () => {
   const path = usePathname();
   const portal = path.match(/^\/acompanhar\/([A-Za-z0-9_-]+)\/?$/);
   if (portal) return <CustomerPortalPage token={portal[1]} />;
+  const clientArea = path.match(/^\/cliente\/([a-z0-9-]+)\/?$/);
+  if (clientArea) return <ClientAreaPage workshop={clientArea[1]} />;
   if (path.startsWith('/redefinir-senha')) return <ResetPasswordPage />;
   if (path.startsWith('/cadastro')) return <RegisterWorkshopPage />;
   return (

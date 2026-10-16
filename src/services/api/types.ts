@@ -278,6 +278,7 @@ export interface UpdateOrderRequest {
 }
 
 export interface PortalOrderDto {
+  id: string;
   orderNumber: number;
   customerFirstName: string | null;
   instrument: string | null;

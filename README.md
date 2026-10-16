@@ -63,6 +63,7 @@ src/
 | Pagamento | `POST /service-orders/{id}/payments` |
 | Estoque +1/−1 | `POST /products/{id}/movements` |
 | Portal do cliente (`/acompanhar/{token}`) | `/portal/orders/{token}` (+ approve/reject) |
+| Área do cliente (`/cliente/{oficina}`) | `/auth/customer/login`, `/auth/customer/request-code`, `/client/orders` (+ approve/reject) |
 | Logs de auditoria (admin) | `GET /audit-logs` |
 
 Também prontos no cliente, para as próximas telas: catálogo de serviços, relatórios
@@ -71,6 +72,14 @@ de usuários.
 
 Ainda sem endpoint no backend (funcionam só no dispositivo): fotos de OS/instrumentos,
 alteração de dados da própria conta e o simulador offline.
+
+## Área do cliente
+
+Quando a oficina abre uma OS, o backend envia **automaticamente pelo WhatsApp** o link
+`/cliente/{oficina}` e um código de acesso de 6 dígitos (uso único, 72h). O cliente entra com
+telefone + código — sem senha — e vê todas as OS dele naquela oficina, com andamento, orçamento
+(aprovar/recusar) e histórico. Se o código expirar, "Receber novo código" envia outro (10 min).
+A sessão do cliente é separada da sessão do balcão.
 
 ## Aparência
 

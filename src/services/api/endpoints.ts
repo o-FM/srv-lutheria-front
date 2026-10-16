@@ -145,6 +145,20 @@ export const portalEndpoints = {
     http.post<PortalOrderDto>(`/portal/orders/${id(token)}/quote/reject`, { reason }, { auth: false }),
 };
 
+/** Área do cliente: login por telefone + código do WhatsApp; demais rotas com o token do cliente. */
+export const clientEndpoints = {
+  requestCode: (workshop: string, phone: string) =>
+    http.post<void>('/auth/customer/request-code', { workshop, phone }, { auth: false }),
+  login: (workshop: string, phone: string, code: string) =>
+    http.post<TokenResponse>('/auth/customer/login', { workshop, phone, code }, { auth: false }),
+  me: (token: string) => http.get<{ id: string; name: string }>('/client/me', { bearer: token }),
+  orders: (token: string) => http.get<PortalOrderDto[]>('/client/orders', { bearer: token }),
+  approve: (token: string, orderId: string) =>
+    http.post<PortalOrderDto>(`/client/orders/${id(orderId)}/quote/approve`, undefined, { bearer: token }),
+  reject: (token: string, orderId: string, reason?: string) =>
+    http.post<PortalOrderDto>(`/client/orders/${id(orderId)}/quote/reject`, { reason }, { bearer: token }),
+};
+
 export const reportEndpoints = {
   dashboard: () => http.get<DashboardDto>('/reports/dashboard'),
   financial: (from?: string, to?: string) =>
@@ -175,6 +189,7 @@ export const api = {
   catalog: catalogEndpoints,
   orders: orderEndpoints,
   portal: portalEndpoints,
+  client: clientEndpoints,
   reports: reportEndpoints,
   notifications: notificationEndpoints,
   privacy: privacyEndpoints,
