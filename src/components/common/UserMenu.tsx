@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ChevronDown, LogOut, Palette, RotateCcw, UserCheck, Users } from 'lucide-react';
+import { ChevronDown, Download, LogOut, Palette, RotateCcw, UserCheck, Users } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { isApiMode } from '../../config/env';
 import { getRolePermissions } from '../../utils/permissions';
+import { useInstallPrompt } from '../../hooks/useInstallPrompt';
 import type { UserRole } from '../../types';
 
 const DEMO_PERSONAS: { role: UserRole; title: string; subtitle: string }[] = [
@@ -31,7 +32,8 @@ export const UserMenu: React.FC<{ onOpenAppearance: () => void; compact?: boolea
   placement = 'down',
 }) => {
   const { user, logout, requestReauthentication, setIsAccountSettingsOpen } = useAuth();
-  const { currentRole, resetToDefaults } = useApp();
+  const { currentRole, resetToDefaults, showToast } = useApp();
+  const { mode: installMode, install } = useInstallPrompt();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -101,6 +103,27 @@ export const UserMenu: React.FC<{ onOpenAppearance: () => void; compact?: boolea
           <button type="button" role="menuitem" className={item} onClick={() => { setOpen(false); onOpenAppearance(); }}>
             <Palette className="w-4 h-4 text-base-400" /> Aparência
           </button>
+          {installMode && (
+            <button
+              type="button"
+              role="menuitem"
+              className={item}
+              onClick={() => {
+                setOpen(false);
+                if (installMode === 'prompt') {
+                  install();
+                } else {
+                  showToast({
+                    title: 'Instalar no iPhone/iPad',
+                    description: 'No Safari, toque em Compartilhar → Adicionar à Tela de Início.',
+                    type: 'info',
+                  });
+                }
+              }}
+            >
+              <Download className="w-4 h-4 text-base-400" /> Instalar app
+            </button>
+          )}
 
           {!isApiMode && (
             <>

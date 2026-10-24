@@ -7,6 +7,7 @@ import { Header } from './components/common/Header';
 import { Sidebar } from './components/common/Sidebar';
 import { BottomTabBar } from './components/common/BottomTabBar';
 import { ToastContainer } from './components/common/ToastContainer';
+import { PwaPrompt } from './components/common/PwaPrompt';
 import { CameraModal } from './components/common/CameraModal';
 import { BarcodeScannerModal } from './components/common/BarcodeScannerModal';
 import { GlobalSearchModal } from './components/common/GlobalSearchModal';
@@ -104,6 +105,7 @@ export default function App() {
       <ThemeProvider>
         <AppProvider>
           <Routes />
+          <PwaPrompt />
         </AppProvider>
       </ThemeProvider>
     </AuthProvider>

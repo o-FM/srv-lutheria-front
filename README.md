@@ -27,6 +27,26 @@ O modo é decidido por `VITE_API_URL` (`src/config/env.ts`): vazio → demonstra
 API. Em produção o `dist/` é estático e pode ser servido por qualquer CDN/servidor web, com
 fallback de rotas para `index.html` (rotas públicas abaixo).
 
+## App instalável (PWA)
+
+O build gera um PWA (`vite-plugin-pwa`): manifest, ícones (`public/`) e service worker
+(`dist/sw.js`). Funciona em Android, iPhone/iPad, Windows, macOS e Linux, sem loja de apps:
+
+- **Android / Chrome / Edge**: menu do usuário → **Instalar app** (ou o ícone de instalar na barra
+  de endereço).
+- **iPhone / iPad**: no Safari, Compartilhar → **Adicionar à Tela de Início** (o menu "Instalar
+  app" mostra essa dica).
+
+O service worker guarda só o próprio front (HTML, JS, CSS, ícones e fontes), então o app abre
+mesmo sem internet; os **dados da API nunca vão para o cache** e as telas pedem conexão para
+carregá-los. Quando sai versão nova, aparece o aviso "Nova versão disponível" e a troca só
+acontece no toque em **Atualizar** (não recarrega a tela no meio de um formulário). Em
+`npm run dev` o service worker fica desligado.
+
+Para publicar: servir por **HTTPS** e entregar `sw.js` e `manifest.webmanifest` com
+`Cache-Control: no-cache` (o resto de `assets/` pode ter cache longo). Para testar localmente:
+`npm run build && npm run preview`.
+
 ## Teste e2e local (front + API)
 
 ```bash
