@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
+import { downscaleToDataUrl } from '../../utils/image';
 import {
   Camera,
   X,
@@ -94,35 +95,40 @@ export const CameraModal: React.FC = () => {
     }
   };
 
-  const captureWebcamFrame = () => {
-    if (!videoRef.current) return;
-    triggerHaptic();
-    const canvas = document.createElement('canvas');
-    canvas.width = videoRef.current.videoWidth || 640;
-    canvas.height = videoRef.current.videoHeight || 480;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-      setSelectedPhotoUrl(dataUrl);
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
-        streamRef.current = null;
-      }
-      setIsWebcamActive(false);
-    }
+  const showPhotoError = () => {
+    showToast({
+      title: 'Não foi possível processar a foto',
+      description: 'Tente outra imagem ou use a câmera ao vivo.',
+      type: 'error',
+    });
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const captureWebcamFrame = async () => {
+    if (!videoRef.current) return;
+    triggerHaptic();
+    try {
+      setSelectedPhotoUrl(await downscaleToDataUrl(videoRef.current));
+    } catch {
+      showPhotoError();
+      return;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    setIsWebcamActive(false);
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      triggerHaptic();
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setSelectedPhotoUrl(event.target?.result as string);
-        setCaption(`Foto de ${file.name.replace(/\.[^/.]+$/, '')}`);
-      };
-      reader.readAsDataURL(file);
+    e.target.value = ''; // permite escolher o mesmo arquivo de novo
+    if (!file) return;
+    triggerHaptic();
+    try {
+      setSelectedPhotoUrl(await downscaleToDataUrl(file));
+      setCaption(`Foto de ${file.name.replace(/\.[^/.]+$/, '')}`);
+    } catch {
+      showPhotoError();
     }
   };
 

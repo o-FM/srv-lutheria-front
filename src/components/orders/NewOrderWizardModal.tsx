@@ -219,7 +219,7 @@ export const NewOrderWizardModal: React.FC = () => {
             tuningPreference: 'Padrão E',
             conditionNotes: reportedIssue,
           },
-          photos
+          [] // as fotos de entrada ficam só na OS, sem duplicar no instrumento
         );
         setSelectedInstrumentId(createdInst.id);
         setIsAddingNewInstrument(false);
