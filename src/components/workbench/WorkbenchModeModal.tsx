@@ -16,11 +16,17 @@ import {
 } from 'lucide-react';
 import { Order } from '../../types';
 
+// Casca: decide se a bancada aparece. Os hooks ficam em WorkbenchContent, que é
+// montado a cada abertura (estado e timer começam do zero).
 export const WorkbenchModeModal: React.FC = () => {
+  const { isWorkbenchModeOpen, currentRole } = useApp();
+  if (!isWorkbenchModeOpen || currentRole !== 'luthier') return null;
+  return <WorkbenchContent />;
+};
+
+const WorkbenchContent: React.FC = () => {
   const {
-    isWorkbenchModeOpen,
     setIsWorkbenchModeOpen,
-    currentRole,
     orders,
     instruments,
     clients,
@@ -31,8 +37,6 @@ export const WorkbenchModeModal: React.FC = () => {
     triggerHaptic,
     showToast,
   } = useApp();
-
-  if (!isWorkbenchModeOpen || currentRole !== 'luthier') return null;
 
   // Find active orders on bench (em_execucao, diagnostico, recebido)
   const benchOrders = orders.filter(
@@ -49,7 +53,7 @@ export const WorkbenchModeModal: React.FC = () => {
   const [timerPreset, setTimerPreset] = useState<'30m' | '60m' | '10m'>('30m');
 
   useEffect(() => {
-    let interval: any = null;
+    let interval: ReturnType<typeof setInterval> | undefined;
     if (isTimerRunning && timerSeconds > 0) {
       interval = setInterval(() => {
         setTimerSeconds((prev) => prev - 1);
@@ -66,8 +70,6 @@ export const WorkbenchModeModal: React.FC = () => {
     }
     return () => clearInterval(interval);
   }, [isTimerRunning, timerSeconds, triggerHaptic, showToast]);
-
-  if (!isWorkbenchModeOpen) return null;
 
   const currentOrder = orders.find((o) => o.id === selectedOrderId) || orders[0];
   const instrument = instruments.find((i) => i.id === currentOrder?.instrumentId);
