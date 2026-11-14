@@ -8,6 +8,22 @@ import React, {
 } from 'react';
 import { AuthUser, authApi } from '../services/authApi';
 import { UserRole } from '../types';
+import { readJson, readString } from '../utils/storage';
+
+const ROLES: readonly string[] = ['luthier', 'atendente', 'cliente'];
+
+// Usuário salvo só é aceito se tiver o mínimo esperado; senão a sessão é descartada.
+function isStoredAuthUser(value: unknown): value is AuthUser | null {
+  if (typeof value !== 'object' || value === null) return false;
+  const u = value as Record<string, unknown>;
+  return (
+    typeof u.id === 'string' &&
+    typeof u.name === 'string' &&
+    typeof u.email === 'string' &&
+    typeof u.role === 'string' &&
+    ROLES.includes(u.role)
+  );
+}
 
 interface ReauthModalState {
   isOpen: boolean;
@@ -49,12 +65,14 @@ const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes of inactivity
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [token, setToken] = useState<string | null>(() => {
-    return localStorage.getItem('luthier_auth_token') || sessionStorage.getItem('luthier_auth_token');
+    return readString('luthier_auth_token') || readString('luthier_auth_token', sessionStorage);
   });
 
   const [user, setUser] = useState<AuthUser | null>(() => {
-    const saved = localStorage.getItem('luthier_auth_user') || sessionStorage.getItem('luthier_auth_user');
-    return saved ? JSON.parse(saved) : null;
+    return (
+      readJson<AuthUser | null>('luthier_auth_user', null, isStoredAuthUser) ??
+      readJson<AuthUser | null>('luthier_auth_user', null, isStoredAuthUser, sessionStorage)
+    );
   });
 
   const [isLoading, setIsLoading] = useState<boolean>(true);

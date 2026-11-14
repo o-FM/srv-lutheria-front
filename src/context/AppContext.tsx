@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import confetti from 'canvas-confetti';
 import {
   Client,
@@ -22,6 +22,15 @@ import {
   INITIAL_PAYMENTS,
   INITIAL_MOVEMENTS,
 } from '../data/seedData';
+import {
+  BUSINESS_DATA_KEYS,
+  isArray,
+  readJson,
+  readString,
+  removeKeys,
+  writeJson,
+  writeString,
+} from '../utils/storage';
 
 interface AppContextType {
   // State
@@ -105,36 +114,30 @@ const STATUS_FLOW: OrderStatus[] = [
 ];
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // Load from localStorage or seed
-  const [clients, setClients] = useState<Client[]>(() => {
-    const saved = localStorage.getItem('luthier_clients');
-    return saved ? JSON.parse(saved) : INITIAL_CLIENTS;
-  });
+  // Load from localStorage or seed (JSON corrompido volta para as seeds)
+  const [clients, setClients] = useState<Client[]>(() =>
+    readJson('luthier_clients', INITIAL_CLIENTS, isArray<Client>)
+  );
 
-  const [instruments, setInstruments] = useState<Instrument[]>(() => {
-    const saved = localStorage.getItem('luthier_instruments');
-    return saved ? JSON.parse(saved) : INITIAL_INSTRUMENTS;
-  });
+  const [instruments, setInstruments] = useState<Instrument[]>(() =>
+    readJson('luthier_instruments', INITIAL_INSTRUMENTS, isArray<Instrument>)
+  );
 
-  const [orders, setOrders] = useState<Order[]>(() => {
-    const saved = localStorage.getItem('luthier_orders');
-    return saved ? JSON.parse(saved) : INITIAL_ORDERS;
-  });
+  const [orders, setOrders] = useState<Order[]>(() =>
+    readJson('luthier_orders', INITIAL_ORDERS, isArray<Order>)
+  );
 
-  const [stock, setStock] = useState<StockItem[]>(() => {
-    const saved = localStorage.getItem('luthier_stock');
-    return saved ? JSON.parse(saved) : INITIAL_STOCK;
-  });
+  const [stock, setStock] = useState<StockItem[]>(() =>
+    readJson('luthier_stock', INITIAL_STOCK, isArray<StockItem>)
+  );
 
-  const [payments, setPayments] = useState<Payment[]>(() => {
-    const saved = localStorage.getItem('luthier_payments');
-    return saved ? JSON.parse(saved) : INITIAL_PAYMENTS;
-  });
+  const [payments, setPayments] = useState<Payment[]>(() =>
+    readJson('luthier_payments', INITIAL_PAYMENTS, isArray<Payment>)
+  );
 
-  const [stockMovements, setStockMovements] = useState<StockMovement[]>(() => {
-    const saved = localStorage.getItem('luthier_movements');
-    return saved ? JSON.parse(saved) : INITIAL_MOVEMENTS;
-  });
+  const [stockMovements, setStockMovements] = useState<StockMovement[]>(() =>
+    readJson('luthier_movements', INITIAL_MOVEMENTS, isArray<StockMovement>)
+  );
 
   // UI state
   const [currentRole, setRoleState] = useState<UserRole>('luthier');
@@ -156,7 +159,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Dark mode
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
-    return localStorage.getItem('luthier_dark_mode') === 'true';
+    return readString('luthier_dark_mode') === 'true';
   });
 
   // Modals
@@ -165,33 +168,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [isBarcodeModalOpen, setIsBarcodeModalOpen] = useState<boolean>(false);
   const [barcodeCallback, setBarcodeCallback] = useState<((code: string) => void) | null>(null);
 
-  // Sync to localStorage
   useEffect(() => {
-    localStorage.setItem('luthier_clients', JSON.stringify(clients));
-  }, [clients]);
-
-  useEffect(() => {
-    localStorage.setItem('luthier_instruments', JSON.stringify(instruments));
-  }, [instruments]);
-
-  useEffect(() => {
-    localStorage.setItem('luthier_orders', JSON.stringify(orders));
-  }, [orders]);
-
-  useEffect(() => {
-    localStorage.setItem('luthier_stock', JSON.stringify(stock));
-  }, [stock]);
-
-  useEffect(() => {
-    localStorage.setItem('luthier_payments', JSON.stringify(payments));
-  }, [payments]);
-
-  useEffect(() => {
-    localStorage.setItem('luthier_movements', JSON.stringify(stockMovements));
-  }, [stockMovements]);
-
-  useEffect(() => {
-    localStorage.setItem('luthier_dark_mode', String(isDarkMode));
+    writeString('luthier_dark_mode', String(isDarkMode));
     if (isDarkMode) {
       document.documentElement.classList.add('dark');
     } else {
@@ -223,6 +201,34 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const dismissToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
+
+  // Sync to localStorage. Se a gravação falhar (cota cheia, storage bloqueado),
+  // avisa uma única vez até a próxima gravação bem-sucedida.
+  const storageWarnedRef = useRef(false);
+  const persist = useCallback(
+    (key: string, value: unknown) => {
+      if (writeJson(key, value)) {
+        storageWarnedRef.current = false;
+        return;
+      }
+      if (storageWarnedRef.current) return;
+      storageWarnedRef.current = true;
+      showToast({
+        title: 'Armazenamento do aparelho cheio',
+        description: 'As últimas alterações não foram salvas. Remova fotos ou exporte dados.',
+        type: 'error',
+        duration: 8000,
+      });
+    },
+    [showToast]
+  );
+
+  useEffect(() => persist('luthier_clients', clients), [persist, clients]);
+  useEffect(() => persist('luthier_instruments', instruments), [persist, instruments]);
+  useEffect(() => persist('luthier_orders', orders), [persist, orders]);
+  useEffect(() => persist('luthier_stock', stock), [persist, stock]);
+  useEffect(() => persist('luthier_payments', payments), [persist, payments]);
+  useEffect(() => persist('luthier_movements', stockMovements), [persist, stockMovements]);
 
   const toggleDarkMode = useCallback(() => {
     setIsDarkMode((prev) => !prev);
@@ -848,12 +854,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, []);
 
   const resetToDefaults = useCallback(() => {
-    localStorage.removeItem('luthier_clients');
-    localStorage.removeItem('luthier_instruments');
-    localStorage.removeItem('luthier_orders');
-    localStorage.removeItem('luthier_stock');
-    localStorage.removeItem('luthier_payments');
-    localStorage.removeItem('luthier_movements');
+    removeKeys(BUSINESS_DATA_KEYS);
     setClients(INITIAL_CLIENTS);
     setInstruments(INITIAL_INSTRUMENTS);
     setOrders(INITIAL_ORDERS);
