@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { authApi } from '../../services/authApi';
-import { formatCpf, cleanCpf } from '../../utils/cpfValidator';
+import { formatIdentifierInput } from '../../utils/identifier';
 import { KeyRound, X, Mail, CheckCircle2, AlertCircle } from 'lucide-react';
 
 export const ForgotPasswordModal: React.FC = () => {
@@ -14,18 +14,8 @@ export const ForgotPasswordModal: React.FC = () => {
   if (!isForgotPasswordOpen) return null;
 
   const handleIdentifierChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
     setErrorMsg(null);
-    if (val.includes('@')) {
-      setIdentifier(val.trim());
-    } else {
-      const digits = cleanCpf(val);
-      if (digits.length > 0) {
-        setIdentifier(formatCpf(digits));
-      } else {
-        setIdentifier(val);
-      }
-    }
+    setIdentifier(formatIdentifierInput(e.target.value));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -104,6 +94,11 @@ export const ForgotPasswordModal: React.FC = () => {
                 </label>
                 <input
                   type="text"
+                  inputMode="email"
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   autoFocus
                   value={identifier}
                   onChange={handleIdentifierChange}

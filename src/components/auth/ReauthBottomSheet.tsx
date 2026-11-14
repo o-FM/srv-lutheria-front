@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { authApi } from '../../services/authApi';
-import { formatCpf, isValidCpf, isValidEmail, cleanCpf } from '../../utils/cpfValidator';
+import { formatIdentifierInput } from '../../utils/identifier';
 import {
   Lock,
   X,
@@ -59,21 +59,9 @@ export const ReauthBottomSheet: React.FC = () => {
   if (!reauthModal.isOpen) return null;
 
   const handleIdentifierChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
     setErrorMsg(null);
-    if (val.includes('@')) {
-      setIdentifier(val.trim());
-    } else {
-      const digits = cleanCpf(val);
-      if (digits.length > 0) {
-        setIdentifier(formatCpf(digits));
-      } else {
-        setIdentifier(val);
-      }
-    }
+    setIdentifier(formatIdentifierInput(e.target.value));
   };
-
-  const isEmailMode = identifier.includes('@');
 
   const handleConfirm = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -200,9 +188,12 @@ export const ReauthBottomSheet: React.FC = () => {
               <input
                 ref={inputRef}
                 id="reauth-identifier"
-                type={isEmailMode ? 'email' : 'text'}
-                inputMode={isEmailMode ? 'email' : 'numeric'}
+                type="text"
+                inputMode="email"
                 autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 value={identifier}
                 onChange={handleIdentifierChange}
                 placeholder="nome@email.com ou 000.000.000-00"

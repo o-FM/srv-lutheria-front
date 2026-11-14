@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
-import { formatCpf, isValidCpf, isValidEmail, cleanCpf } from '../../utils/cpfValidator';
+import { isValidCpf, isValidEmail, cleanCpf } from '../../utils/cpfValidator';
+import { formatIdentifierInput, isEmailIdentifier } from '../../utils/identifier';
 import {
   Eye,
   EyeOff,
@@ -52,24 +53,11 @@ export const LoginPage: React.FC = () => {
     return () => clearInterval(timer);
   }, [lockedInfo]);
 
-  // Handle single field input: email or CPF with live mask
+  // Campo único: e-mail ou CPF (máscara só quando há apenas dígitos)
   const handleIdentifierChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
     setFieldError(null);
     setGeneralError(null);
-
-    if (val.includes('@')) {
-      // Treat as email
-      setIdentifier(val.trim());
-    } else {
-      // Numbers only -> CPF formatting
-      const digits = cleanCpf(val);
-      if (digits.length > 0) {
-        setIdentifier(formatCpf(digits));
-      } else {
-        setIdentifier(val);
-      }
-    }
+    setIdentifier(formatIdentifierInput(e.target.value));
   };
 
   // Validate on blur
@@ -94,7 +82,7 @@ export const LoginPage: React.FC = () => {
     }
   };
 
-  const isEmailMode = identifier.includes('@');
+  const isEmailMode = isEmailIdentifier(identifier);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -224,10 +212,12 @@ export const LoginPage: React.FC = () => {
                 ref={inputRef}
                 id="auth-identifier"
                 name="username"
-                type={isEmailMode ? 'email' : 'text'}
-                inputMode={isEmailMode ? 'email' : 'numeric'}
+                type="text"
+                inputMode="email"
                 autoComplete="username"
                 autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 value={identifier}
                 onChange={handleIdentifierChange}
                 onBlur={handleIdentifierBlur}
