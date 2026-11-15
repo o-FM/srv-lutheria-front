@@ -92,6 +92,7 @@ const AppProviderKeyed: React.FC<{ children: React.ReactNode }> = ({ children })
       initialRole={user?.role ?? 'luthier'}
       isPersistenceEnabled={!!user}
       initialNotice={switchNotice}
+      currentUserName={user?.name ?? ''}
     >
       {children}
     </AppProvider>

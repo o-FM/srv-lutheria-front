@@ -148,6 +148,8 @@ interface AppProviderProps {
   isPersistenceEnabled?: boolean;
   /** Toast exibido uma vez quando o provider monta. */
   initialNotice?: Omit<ToastMessage, 'id'> | null;
+  /** Nome do usuário logado, usado como autor dos eventos da timeline. */
+  currentUserName?: string;
 }
 
 export const AppProvider: React.FC<AppProviderProps> = ({
@@ -155,6 +157,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({
   initialRole = 'luthier',
   isPersistenceEnabled = true,
   initialNotice = null,
+  currentUserName = '',
 }) => {
   // Load from localStorage or seed (JSON corrompido volta para as seeds)
   const [clients, setClients] = useState<Client[]>(() =>
@@ -185,6 +188,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({
   // O papel vem do usuário logado; trocar de usuário remonta o provider.
   const currentRole: UserRole = initialRole;
   const permissions = getRolePermissions(currentRole);
+  // Autor da timeline: o usuário logado de verdade (o provider é remontado por usuário).
+  const actor = currentUserName ? `${currentUserName} (${permissions.roleLabel})` : permissions.roleLabel;
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('online');
   const [offlineQueueCount, setOfflineQueueCount] = useState<number>(0);
   const [activeTab, setActiveTab] = useState<string>('hoje');
@@ -457,13 +462,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({
       const alreadyDeducted = isPartsDeducted(order);
       const deductNow = target === 'em_execucao' && !alreadyDeducted;
 
-      // Timeline event title & user description
-      const userLabel =
-        currentRole === 'luthier'
-          ? 'Armando (Luthier)'
-          : currentRole === 'atendente'
-          ? 'Mariana (Balcão)'
-          : 'Cliente';
 
       const newTimelineEvent = {
         id: newId('tl'),
@@ -471,7 +469,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({
         type: 'status_change' as const,
         title: `Status alterado para ${target.toUpperCase()}`,
         description: note || STATUS_DESCRIPTIONS[target],
-        user: userLabel,
+        user: actor,
       };
 
       const updated: Order = {
@@ -610,7 +608,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({
                 type: 'photo_added',
                 title: `Nova foto adicionada: ${newPhoto.tag}`,
                 description: newPhoto.caption,
-                user: currentRole === 'luthier' ? 'Armando (Luthier)' : 'Mariana (Balcão)',
+                user: actor,
               },
               ...order.timeline,
             ],
@@ -664,7 +662,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({
             type: 'quote_approved',
             title: 'Orçamento APROVADO pelo cliente',
             description: 'Autorização recebida com sucesso. OS liberada para execução na bancada.',
-            user: currentRole === 'cliente' ? 'Cliente (Portal)' : 'Mariana (Balcão)',
+            user: currentRole === 'cliente' ? `${actor} pelo portal` : actor,
           },
           {
             id: newId('tl-exec'),
@@ -722,7 +720,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({
                 type: 'quote_rejected',
                 title: 'Orçamento Recusado',
                 description: `Motivo: ${reason}`,
-                user: currentRole === 'cliente' ? 'Cliente' : 'Atendente',
+                user: currentRole === 'cliente' ? `${actor} pelo portal` : actor,
               },
               ...order.timeline,
             ],
@@ -780,7 +778,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({
             type: 'status_change',
             title: 'Ordem de Serviço Aberta',
             description: `OS #${nextNumber} criada na recepção com previsão de 5 dias úteis.`,
-            user: currentRole === 'luthier' ? 'Armando (Luthier)' : 'Mariana (Balcão)',
+            user: actor,
           },
         ],
         technicianNotes: orderData.technicianNotes || '',
@@ -874,7 +872,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({
                 type: 'payment_received',
                 title: `Pagamento recebido: R$ ${paymentData.amount.toFixed(2)} (${paymentData.method.toUpperCase()})`,
                 description: `Recibo gerado: ${receiptNumber}`,
-                user: currentRole === 'luthier' ? 'Armando (Luthier)' : 'Mariana (Balcão)',
+                user: actor,
               },
               ...order.timeline,
             ],
