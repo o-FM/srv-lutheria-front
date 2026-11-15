@@ -578,6 +578,10 @@ async function startServer() {
 
       const user = users.find((u) => u.id === session.userId);
       const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : undefined;
+      // O portal liga o cliente ao cadastro pelo e-mail: trocar o e-mail daria acesso às OS de outro cliente.
+      if (normalizedEmail && user?.role === 'cliente' && normalizedEmail !== user.email.toLowerCase()) {
+        return res.status(403).json({ error: 'Clientes não podem alterar o e-mail. Fale com a oficina.' });
+      }
       if (normalizedEmail && users.some((u) => u.id !== session.userId && u.email.toLowerCase() === normalizedEmail)) {
         return res.status(409).json({ error: 'Este e-mail já está em uso por outra conta.' });
       }

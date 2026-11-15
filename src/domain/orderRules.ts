@@ -107,6 +107,33 @@ export function buildPendingQuote(order: Order): Quote {
   };
 }
 
+/**
+ * Desfaz uma transição de status sobre a OS **atual**: volta status, datas e
+ * orçamento gerado, e tira o evento da timeline. Pagamentos, fotos e serviços
+ * registrados depois são preservados. Devolve `null` se a OS já saiu de `appliedStatus`.
+ */
+export function revertTransition(
+  current: Order,
+  before: Order,
+  appliedStatus: OrderStatus,
+  timelineEventId: string
+): Order | null {
+  if (current.status !== appliedStatus) return null;
+
+  const quoteWasGenerated =
+    !before.quote && current.quote?.id === buildPendingQuote(before).id;
+
+  return {
+    ...current,
+    status: before.status,
+    completedDate: before.completedDate,
+    deliveredDate: before.deliveredDate,
+    partsDeducted: before.partsDeducted,
+    quote: quoteWasGenerated ? undefined : current.quote,
+    timeline: current.timeline.filter((event) => event.id !== timelineEventId),
+  };
+}
+
 /** Peças de todos os serviços da OS, na ordem em que aparecem. */
 export function partsToDeduct(order: Order): PartDeduction[] {
   return order.services.flatMap((service) =>

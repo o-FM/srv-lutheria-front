@@ -8,6 +8,7 @@ import {
   nextStatus,
   partsToDeduct,
   remainingBalance,
+  revertTransition,
 } from './orderRules';
 
 function makeOrder(status: OrderStatus, overrides: Partial<Order> = {}): Order {
@@ -189,5 +190,62 @@ describe('partsToDeduct', () => {
       { stockItemId: 'stk-1', quantity: 1 },
       { stockItemId: 'stk-2', quantity: 2 },
     ]);
+  });
+});
+
+describe('revertTransition', () => {
+  const event = { id: 'tl-new', timestamp: '', type: 'status_change', title: '', description: '', user: '' } as const;
+  const older = { ...event, id: 'tl-old' };
+
+  it('volta só status/datas/evento e preserva o que foi feito depois', () => {
+    const before = makeOrder('em_execucao', { timeline: [older], paidAmount: 0 });
+    // Depois da transição, um pagamento e uma foto entraram na OS.
+    const current = makeOrder('pronto', {
+      completedDate: '2026-11-15',
+      paidAmount: 100,
+      photos: [{ id: 'ph-1' } as Order['photos'][number]],
+      timeline: [{ ...event, id: 'tl-pay' }, event, older],
+    });
+
+    const result = revertTransition(current, before, 'pronto', event.id);
+
+    expect(result).not.toBeNull();
+    expect(result?.status).toBe('em_execucao');
+    expect(result?.completedDate).toBeUndefined();
+    expect(result?.paidAmount).toBe(100);
+    expect(result?.photos).toHaveLength(1);
+    expect(result?.timeline.map((e) => e.id)).toEqual(['tl-pay', 'tl-old']);
+  });
+
+  it('remove o orçamento gerado pela transição', () => {
+    const before = makeOrder('orcamento');
+    const generated = buildPendingQuote(before);
+    const current = makeOrder('aguardando_aprovacao', { quote: generated, timeline: [event] });
+
+    expect(revertTransition(current, before, 'aguardando_aprovacao', event.id)?.quote).toBeUndefined();
+  });
+
+  it('mantém o orçamento que já existia antes', () => {
+    const before = makeOrder('orcamento', { quote: pendingQuote });
+    const current = makeOrder('aguardando_aprovacao', { quote: pendingQuote, timeline: [event] });
+
+    expect(revertTransition(current, before, 'aguardando_aprovacao', event.id)?.quote).toBe(pendingQuote);
+  });
+
+  it('não desfaz quando a OS já mudou de status depois', () => {
+    const before = makeOrder('em_execucao');
+    const current = makeOrder('entregue', { timeline: [event] });
+
+    expect(revertTransition(current, before, 'pronto', event.id)).toBeNull();
+  });
+
+  it('não altera os objetos recebidos', () => {
+    const before = makeOrder('em_execucao');
+    const current = makeOrder('pronto', { timeline: [event] });
+    const snapshot = JSON.stringify(current);
+
+    revertTransition(current, before, 'pronto', event.id);
+
+    expect(JSON.stringify(current)).toBe(snapshot);
   });
 });
