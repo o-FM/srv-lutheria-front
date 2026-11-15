@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { formatCpf, isValidCpf, maskCpf, matchesCpfQuery } from '../../utils/cpfValidator';
+import { openWhatsApp } from '../../utils/whatsapp';
 import {
   Users,
   Search,
@@ -216,8 +217,9 @@ export const ClientsModule: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => {
-                        const clean = client.phone.replace(/\D/g, '');
-                        window.open(`https://wa.me/55${clean}`, '_blank');
+                        if (!openWhatsApp(client.phone)) {
+                          showToast({ title: 'Cliente sem telefone cadastrado', type: 'warning' });
+                        }
                       }}
                       className="p-2 rounded-xl bg-emerald-950 text-emerald-400 hover:bg-emerald-900 border border-emerald-800/80 active:scale-95"
                       title="WhatsApp com 1 toque"
@@ -268,8 +270,9 @@ export const ClientsModule: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    const clean = selectedClient.phone.replace(/\D/g, '');
-                    window.open(`https://wa.me/55${clean}`, '_blank');
+                    if (!openWhatsApp(selectedClient.phone)) {
+                      showToast({ title: 'Cliente sem telefone cadastrado', type: 'warning' });
+                    }
                   }}
                   className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-950 text-emerald-300 border border-emerald-800 text-xs font-semibold"
                 >

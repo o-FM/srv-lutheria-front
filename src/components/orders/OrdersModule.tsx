@@ -15,6 +15,7 @@ import {
   Camera,
 } from 'lucide-react';
 import { OrderStatus } from '../../types';
+import { openWhatsApp } from '../../utils/whatsapp';
 
 export const OrdersModule: React.FC = () => {
   const {
@@ -27,6 +28,7 @@ export const OrdersModule: React.FC = () => {
     deliverOrder,
     setIsNewOrderWizardOpen,
     triggerHaptic,
+    showToast,
   } = useApp();
 
   const [statusFilter, setStatusFilter] = useState<string>('todos');
@@ -268,8 +270,9 @@ export const OrdersModule: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => {
-                          const phoneClean = client?.phone.replace(/\D/g, '') || '';
-                          window.open(`https://wa.me/55${phoneClean}`, '_blank');
+                          if (!openWhatsApp(client?.phone)) {
+                            showToast({ title: 'Cliente sem telefone cadastrado', type: 'warning' });
+                          }
                         }}
                         className="p-1.5 rounded-lg bg-emerald-950 text-emerald-400 hover:bg-emerald-900 border border-emerald-800/60"
                         title="Abrir conversa WhatsApp"

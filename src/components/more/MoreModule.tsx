@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { usePermissions } from '../../hooks/usePermissions';
+import { openWhatsApp } from '../../utils/whatsapp';
 import {
   Calendar,
   DollarSign,
@@ -72,8 +73,9 @@ export const MoreModule: React.FC = () => {
 
   const handleSendWhatsApp = (text: string) => {
     triggerHaptic();
-    const phoneClean = orderClient?.phone.replace(/\D/g, '') || '';
-    window.open(`https://wa.me/55${phoneClean}?text=${encodeURIComponent(text)}`, '_blank');
+    if (!openWhatsApp(orderClient?.phone, text)) {
+      showToast({ title: 'Cliente sem telefone cadastrado', type: 'warning' });
+    }
   };
 
   const handleCopyText = (text: string) => {

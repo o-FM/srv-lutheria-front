@@ -26,6 +26,7 @@ import { OrderStatus, ServiceItem } from '../../types';
 import { canApproveQuote, remainingBalance } from '../../domain/orderRules';
 import { nowTimestamp } from '../../utils/dates';
 import { computeOrderTotals } from '../../domain/totals';
+import { openWhatsApp } from '../../utils/whatsapp';
 import { usePermissions } from '../../hooks/usePermissions';
 
 const STATUS_STEPS: { status: OrderStatus; label: string }[] = [
@@ -149,11 +150,11 @@ export const OrderDetailSheet: React.FC = () => {
 
   const handleShareWhatsApp = () => {
     triggerHaptic();
-    const phoneClean = client?.phone.replace(/\D/g, '') || '';
-    const message = encodeURIComponent(
-      `Olá ${client?.name}! Aqui é da Oficina Luthier.\n\nAtualização sobre seu ${instrument?.brand} ${instrument?.model} (OS #${order.orderNumber}):\nStatus atual: *${order.status.toUpperCase().replace('_', ' ')}*.\n\nAcompanhe fotos e detalhes pelo link do portal:\nhttps://luthieria.app/os/${order.clientTrackingToken}\n\nQualquer dúvida, estamos à disposição na bancada!`
-    );
-    window.open(`https://wa.me/55${phoneClean}?text=${message}`, '_blank');
+    // Texto puro: openWhatsApp codifica uma única vez.
+    const message = `Olá ${client?.name}! Aqui é da Oficina Luthier.\n\nAtualização sobre seu ${instrument?.brand} ${instrument?.model} (OS #${order.orderNumber}):\nStatus atual: *${order.status.toUpperCase().replace('_', ' ')}*.\n\nAcompanhe fotos e detalhes pelo link do portal:\nhttps://luthieria.app/os/${order.clientTrackingToken}\n\nQualquer dúvida, estamos à disposição na bancada!`;
+    if (!openWhatsApp(client?.phone, message)) {
+      showToast({ title: 'Cliente sem telefone cadastrado', type: 'warning' });
+    }
   };
 
   const handleSavePayment = () => {

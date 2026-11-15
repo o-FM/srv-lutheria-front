@@ -17,6 +17,10 @@ import {
 import { OrderStatus } from '../../types';
 import { canApproveQuote } from '../../domain/orderRules';
 import { computeOrderTotals, servicePartsTotal } from '../../domain/totals';
+import { openWhatsApp } from '../../utils/whatsapp';
+
+// WhatsApp da oficina (sem o 55). Vai para src/config/workshop.ts na tarefa 2.x.
+const WORKSHOP_WHATSAPP = '11987654321';
 
 export const ClientPortalView: React.FC = () => {
   const { user, requestReauthentication } = useAuth();
@@ -88,10 +92,10 @@ export const ClientPortalView: React.FC = () => {
 
   const handleContactWhatsApp = () => {
     triggerHaptic();
-    const msg = encodeURIComponent(
+    openWhatsApp(
+      WORKSHOP_WHATSAPP,
       `Olá luthier! Sou ${client?.name}, sobre a OS #${order.orderNumber} do meu ${instrument?.brand} ${instrument?.model}. Poderiam tirar uma dúvida?`
     );
-    window.open(`https://wa.me/5511987654321?text=${msg}`, '_blank');
   };
 
   return (
