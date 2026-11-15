@@ -96,8 +96,8 @@ export const ClientsModule: React.FC = () => {
     triggerHaptic();
     const created = createClient({
       name: name.trim(),
-      phone: phone.trim() || '(11) 99999-9999',
-      email: email.trim() || `${name.toLowerCase().replace(/\s+/g, '')}@gmail.com`,
+      phone: phone.trim(),
+      email: email.trim(),
       cpf: cpf.trim(),
       address: address.trim(),
       notes: notes.trim(),

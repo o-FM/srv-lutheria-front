@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { InstrumentType, Photo, ServiceItem } from '../../types';
 import { newId } from '../../utils/ids';
+import { isPlainObject, readJson, removeKeys, writeJson } from '../../utils/storage';
 
 const COMMON_SERVICES = [
   {
@@ -46,9 +47,25 @@ const COMMON_SERVICES = [
   },
 ];
 
+const DRAFT_KEY = 'luthier_os_wizard_draft';
+
+interface WizardDraft {
+  reportedIssue?: string;
+  selectedClientId?: string;
+}
+
+const isWizardDraft = (value: unknown): value is WizardDraft =>
+  isPlainObject<WizardDraft>(value);
+
+// Casca: o conteúdo é montado a cada abertura, então o passo e os campos começam do zero.
 export const NewOrderWizardModal: React.FC = () => {
+  const { isNewOrderWizardOpen } = useApp();
+  if (!isNewOrderWizardOpen) return null;
+  return <NewOrderWizardContent />;
+};
+
+const NewOrderWizardContent: React.FC = () => {
   const {
-    isNewOrderWizardOpen,
     setIsNewOrderWizardOpen,
     clients,
     createClient,
@@ -61,10 +78,18 @@ export const NewOrderWizardModal: React.FC = () => {
     showToast,
   } = useApp();
 
+  // Rascunho: só o defeito relatado e o cliente escolhido são restaurados.
+  const [draft] = useState<WizardDraft>(() => readJson<WizardDraft>(DRAFT_KEY, {}, isWizardDraft));
+
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
   // Client Selection / Quick Add
-  const [selectedClientId, setSelectedClientId] = useState<string>('');
+  const [selectedClientId, setSelectedClientId] = useState<string>(() =>
+    typeof draft.selectedClientId === 'string' &&
+    clients.some((c) => c.id === draft.selectedClientId)
+      ? draft.selectedClientId
+      : ''
+  );
   const [isAddingNewClient, setIsAddingNewClient] = useState(false);
   const [newClientName, setNewClientName] = useState('');
   const [newClientPhone, setNewClientPhone] = useState('');
@@ -73,12 +98,14 @@ export const NewOrderWizardModal: React.FC = () => {
   const [selectedInstrumentId, setSelectedInstrumentId] = useState<string>('');
   const [isAddingNewInstrument, setIsAddingNewInstrument] = useState(false);
   const [instType, setInstType] = useState<InstrumentType>('guitarra');
-  const [instBrand, setInstBrand] = useState('Fender');
-  const [instModel, setInstModel] = useState('Stratocaster');
+  const [instBrand, setInstBrand] = useState('');
+  const [instModel, setInstModel] = useState('');
   const [photos, setPhotos] = useState<Photo[]>([]);
 
   // Issue & Voice
-  const [reportedIssue, setReportedIssue] = useState('');
+  const [reportedIssue, setReportedIssue] = useState(() =>
+    typeof draft.reportedIssue === 'string' ? draft.reportedIssue : ''
+  );
   const [isListening, setIsListening] = useState(false);
 
   // Services & Timeline
@@ -88,38 +115,24 @@ export const NewOrderWizardModal: React.FC = () => {
   const [estimatedDeliveryDays, setEstimatedDeliveryDays] = useState(5);
   const [priority, setPriority] = useState<'normal' | 'alta' | 'urgente'>('normal');
 
-  // Load draft from localStorage on mount
-  useEffect(() => {
-    if (isNewOrderWizardOpen) {
-      const draft = localStorage.getItem('luthier_os_wizard_draft');
-      if (draft) {
-        try {
-          const parsed = JSON.parse(draft);
-          if (parsed.reportedIssue) setReportedIssue(parsed.reportedIssue);
-          if (parsed.selectedClientId) setSelectedClientId(parsed.selectedClientId);
-        } catch {
-          // ignore
-        }
-      }
-    }
-  }, [isNewOrderWizardOpen]);
-
   // Auto-save draft
   useEffect(() => {
-    if (isNewOrderWizardOpen) {
-      localStorage.setItem(
-        'luthier_os_wizard_draft',
-        JSON.stringify({ reportedIssue, selectedClientId })
-      );
-    }
-  }, [reportedIssue, selectedClientId, isNewOrderWizardOpen]);
+    writeJson(DRAFT_KEY, { reportedIssue, selectedClientId });
+  }, [reportedIssue, selectedClientId]);
 
-  if (!isNewOrderWizardOpen) return null;
+  // Filter instruments belonging to selected client (cliente novo ainda não tem instrumentos)
+  const clientInstruments = isAddingNewClient
+    ? []
+    : instruments.filter((i) => i.clientId === selectedClientId);
+  const isNewInstrument = isAddingNewInstrument || clientInstruments.length === 0;
 
-  // Filter instruments belonging to selected client
-  const clientInstruments = instruments.filter(
-    (i) => i.clientId === selectedClientId
-  );
+  // Trocar de cliente invalida o instrumento escolhido (ele pertence ao cliente anterior).
+  const handleSelectClient = (clientId: string) => {
+    triggerHaptic();
+    setSelectedClientId(clientId);
+    setSelectedInstrumentId('');
+    setIsAddingNewInstrument(false);
+  };
 
   const handlePhoneChange = (val: string) => {
     const digits = val.replace(/\D/g, '').slice(0, 11);
@@ -182,48 +195,28 @@ export const NewOrderWizardModal: React.FC = () => {
     });
   };
 
+  // Os passos 1 e 2 só validam. Cliente e instrumento novos são criados apenas em
+  // "Abrir OS" (handleFinishOrder): abandonar o wizard não deixa registros órfãos.
   const handleNextStep = () => {
     triggerHaptic();
     if (step === 1) {
-      // Validate or create client
-      if (isAddingNewClient) {
-        if (!newClientName.trim()) {
-          showToast({ title: 'Informe o nome do cliente', type: 'warning' });
-          return;
-        }
-        const created = createClient({
-          name: newClientName.trim(),
-          phone: newClientPhone.trim() || '(11) 99999-0000',
-          email: `${newClientName.toLowerCase().replace(/\s+/g, '')}@email.com`,
-        });
-        setSelectedClientId(created.id);
-        setIsAddingNewClient(false);
-      } else if (!selectedClientId) {
+      if (isAddingNewClient && !newClientName.trim()) {
+        showToast({ title: 'Informe o nome do cliente', type: 'warning' });
+        return;
+      }
+      if (!isAddingNewClient && !selectedClientId) {
         showToast({ title: 'Selecione ou cadastre um cliente', type: 'warning' });
         return;
       }
       setStep(2);
     } else if (step === 2) {
-      // Validate instrument
-      if (isAddingNewInstrument || !selectedInstrumentId) {
-        if (!instBrand.trim() || !instModel.trim()) {
-          showToast({ title: 'Informe marca e modelo do instrumento', type: 'warning' });
-          return;
-        }
-        const createdInst = createInstrument(
-          {
-            clientId: selectedClientId,
-            type: instType,
-            brand: instBrand.trim(),
-            model: instModel.trim(),
-            stringsGauge: '0.10',
-            tuningPreference: 'Padrão E',
-            conditionNotes: reportedIssue,
-          },
-          [] // as fotos de entrada ficam só na OS, sem duplicar no instrumento
-        );
-        setSelectedInstrumentId(createdInst.id);
-        setIsAddingNewInstrument(false);
+      if (isNewInstrument && (!instBrand.trim() || !instModel.trim())) {
+        showToast({ title: 'Informe marca e modelo do instrumento', type: 'warning' });
+        return;
+      }
+      if (!isNewInstrument && !selectedInstrumentId) {
+        showToast({ title: 'Selecione o instrumento ou cadastre outro', type: 'warning' });
+        return;
       }
 
       if (!reportedIssue.trim()) {
@@ -236,6 +229,42 @@ export const NewOrderWizardModal: React.FC = () => {
 
   const handleFinishOrder = () => {
     triggerHaptic();
+
+    // Instrumento existente precisa ser do cliente escolhido.
+    if (!isAddingNewClient && !isNewInstrument) {
+      const instrument = instruments.find((i) => i.id === selectedInstrumentId);
+      if (!instrument || instrument.clientId !== selectedClientId) {
+        showToast({
+          title: 'Instrumento não pertence ao cliente',
+          description: 'Volte ao passo 2 e escolha o instrumento novamente.',
+          type: 'error',
+        });
+        setSelectedInstrumentId('');
+        setStep(2);
+        return;
+      }
+    }
+
+    // Sem dados inventados: telefone e e-mail ficam vazios se não informados.
+    const clientId = isAddingNewClient
+      ? createClient({ name: newClientName.trim(), phone: newClientPhone.trim(), email: '' }).id
+      : selectedClientId;
+
+    const instrumentId = isNewInstrument
+      ? createInstrument(
+          {
+            clientId,
+            type: instType,
+            brand: instBrand.trim(),
+            model: instModel.trim(),
+            stringsGauge: '0.10',
+            tuningPreference: 'Padrão E',
+            conditionNotes: reportedIssue,
+          },
+          [] // as fotos de entrada ficam só na OS, sem duplicar no instrumento
+        ).id
+      : selectedInstrumentId;
+
     const finalServices: ServiceItem[] = selectedServices
       .filter((s) => s.selected)
       .map((s, idx) => ({
@@ -272,12 +301,12 @@ export const NewOrderWizardModal: React.FC = () => {
         services: finalServices,
         photos,
       },
-      selectedClientId,
-      selectedInstrumentId
+      clientId,
+      instrumentId
     );
 
     // Clear draft
-    localStorage.removeItem('luthier_os_wizard_draft');
+    removeKeys([DRAFT_KEY]);
 
     setIsNewOrderWizardOpen(false);
     setActiveOrderId(created.id);
@@ -327,7 +356,11 @@ export const NewOrderWizardModal: React.FC = () => {
                 </span>
                 <button
                   type="button"
-                  onClick={() => setIsAddingNewClient(!isAddingNewClient)}
+                  onClick={() => {
+                    setIsAddingNewClient(!isAddingNewClient);
+                    setSelectedInstrumentId('');
+                    setIsAddingNewInstrument(false);
+                  }}
                   className="text-xs text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1"
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -375,10 +408,7 @@ export const NewOrderWizardModal: React.FC = () => {
                         <button
                           key={cli.id}
                           type="button"
-                          onClick={() => {
-                            triggerHaptic();
-                            setSelectedClientId(cli.id);
-                          }}
+                          onClick={() => handleSelectClient(cli.id)}
                           className={`w-full flex items-center justify-between p-3 rounded-xl border text-left transition-all ${
                             isSelected
                               ? 'bg-amber-950/60 border-amber-500 text-amber-100 shadow-md ring-1 ring-amber-500'
@@ -419,7 +449,7 @@ export const NewOrderWizardModal: React.FC = () => {
               </div>
 
               {/* Existing instrument of this client or create */}
-              {!isAddingNewInstrument && clientInstruments.length > 0 ? (
+              {!isNewInstrument ? (
                 <div className="space-y-2">
                   <p className="text-xs text-stone-400">Instrumentos deste cliente:</p>
                   <div className="space-y-2">
