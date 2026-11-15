@@ -125,6 +125,8 @@ export interface Order {
   totalAmount: number;
   paidAmount: number;
   clientTrackingToken: string;
+  /** Peças já baixadas do estoque. Ausente em OS antigas (ver isPartsDeducted). */
+  partsDeducted?: boolean;
 }
 
 export type StockCategory = 'pecas' | 'cordas' | 'madeiras' | 'insumos';

@@ -31,6 +31,13 @@ import {
   writeJson,
   writeString,
 } from '../utils/storage';
+import {
+  buildPendingQuote,
+  canTransition,
+  isPartsDeducted,
+  nextStatus,
+  partsToDeduct,
+} from '../domain/orderRules';
 
 interface AppContextType {
   // State
@@ -103,15 +110,16 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-const STATUS_FLOW: OrderStatus[] = [
-  'recebido',
-  'diagnostico',
-  'orcamento',
-  'aguardando_aprovacao',
-  'em_execucao',
-  'pronto',
-  'entregue',
-];
+const STATUS_DESCRIPTIONS: Record<OrderStatus, string> = {
+  recebido: 'Instrumento acolhido na recepção',
+  diagnostico: 'Instrumento posicionado na bancada para diagnóstico',
+  orcamento: 'Orçamento detalhado elaborado',
+  aguardando_aprovacao: 'Orçamento encaminhado para aprovação do cliente',
+  em_execucao: 'Mãos à obra! Serviços iniciados na bancada',
+  pronto: 'Serviços finalizados, instrumento limpo e pronto para retirada',
+  entregue: 'Instrumento entregue ao músico com sucesso',
+  cancelado: 'Ordem de serviço cancelada',
+};
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // Load from localStorage or seed (JSON corrompido volta para as seeds)
@@ -324,133 +332,119 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     [stock]
   );
 
+  // Leitura síncrona das OS para validar antes de alterar (sem efeitos dentro de setOrders).
+  const ordersRef = useRef(orders);
+  useEffect(() => {
+    ordersRef.current = orders;
+  }, [orders]);
+
+  const commitOrder = useCallback((updated: Order) => {
+    ordersRef.current = ordersRef.current.map((o) => (o.id === updated.id ? updated : o));
+    setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
+  }, []);
+
+  const deductParts = useCallback(
+    (order: Order, reason: string) => {
+      partsToDeduct(order).forEach((part) =>
+        updateStockQuantity(part.stockItemId, -part.quantity, reason, order.id)
+      );
+    },
+    [updateStockQuantity]
+  );
+
   // Advance Order Status
   const advanceOrderStatus = useCallback(
     (orderId: string, specificStatus?: OrderStatus, note?: string) => {
       triggerHaptic();
 
-      setOrders((prev) => {
-        const order = prev.find((o) => o.id === orderId);
-        if (!order) return prev;
+      const order = ordersRef.current.find((o) => o.id === orderId);
+      if (!order) return;
 
-        const previousOrder = { ...order };
-        let nextStatus: OrderStatus;
+      const target = specificStatus ?? nextStatus(order.status);
+      if (!target) {
+        showToast({ title: `OS #${order.orderNumber} já foi finalizada`, type: 'info' });
+        return;
+      }
 
-        if (specificStatus) {
-          nextStatus = specificStatus;
-        } else {
-          const currentIndex = STATUS_FLOW.indexOf(order.status);
-          if (currentIndex < 0 || currentIndex >= STATUS_FLOW.length - 1) {
-            return prev; // already delivered or invalid
-          }
-          nextStatus = STATUS_FLOW[currentIndex + 1];
+      const check = canTransition(order, target, { allowStepBack: currentRole === 'luthier' });
+      if (!check.ok) {
+        showToast({ title: 'Mudança de status bloqueada', description: check.reason, type: 'warning' });
+        return;
+      }
+
+      const alreadyDeducted = isPartsDeducted(order);
+      const deductNow = target === 'em_execucao' && !alreadyDeducted;
+
+      // Timeline event title & user description
+      const userLabel =
+        currentRole === 'luthier'
+          ? 'Armando (Luthier)'
+          : currentRole === 'atendente'
+          ? 'Mariana (Balcão)'
+          : 'Cliente';
+
+      const newTimelineEvent = {
+        id: 'tl-' + Date.now(),
+        timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
+        type: 'status_change' as const,
+        title: `Status alterado para ${target.toUpperCase()}`,
+        description: note || STATUS_DESCRIPTIONS[target],
+        user: userLabel,
+      };
+
+      const updated: Order = {
+        ...order,
+        status: target,
+        completedDate: target === 'pronto' ? new Date().toISOString().substring(0, 10) : order.completedDate,
+        deliveredDate: target === 'entregue' ? new Date().toISOString().substring(0, 10) : order.deliveredDate,
+        partsDeducted: alreadyDeducted || deductNow,
+        quote:
+          target === 'aguardando_aprovacao' && !order.quote ? buildPendingQuote(order) : order.quote,
+        timeline: [newTimelineEvent, ...order.timeline],
+      };
+      commitOrder(updated);
+
+      if (deductNow) {
+        deductParts(order, `Baixa automática: OS #${order.orderNumber} em execução`);
+      }
+
+      if (target === 'pronto' || target === 'entregue') {
+        try {
+          confetti({ particleCount: 50, spread: 60, origin: { y: 0.8 } });
+        } catch {
+          // ignore
         }
+      }
 
-        // Business rule: Can only go to 'em_execucao' if quote is approved or no quote needed
-        if (nextStatus === 'em_execucao' && order.quote && order.quote.status !== 'aprovado') {
-          showToast({
-            title: 'Orçamento Pendente',
-            description: 'A OS só pode ir para execução após a aprovação formal do cliente.',
-            type: 'warning',
-          });
-          return prev;
-        }
+      // Desfazer só quando a transição não mexeu no estoque.
+      const undo = deductNow
+        ? {}
+        : {
+            undoLabel: 'Desfazer',
+            undoAction: () => {
+              commitOrder(order);
+              showToast({
+                title: `OS #${order.orderNumber} restaurada`,
+                description: `Status voltou para ${order.status}`,
+                type: 'info',
+              });
+            },
+          };
 
-        // Timeline event title & user description
-        const userLabel =
-          currentRole === 'luthier'
-            ? 'Armando (Luthier)'
-            : currentRole === 'atendente'
-            ? 'Mariana (Balcão)'
-            : 'Cliente';
-
-        const statusDescriptions: Record<OrderStatus, string> = {
-          recebido: 'Instrumento acolhido na recepção',
-          diagnostico: 'Instrumento posicionado na bancada para diagnóstico',
-          orcamento: 'Orçamento detalhado elaborado',
-          aguardando_aprovacao: 'Orçamento encaminhado para aprovação do cliente',
-          em_execucao: 'Mãos à obra! Serviços iniciados na bancada',
-          pronto: 'Serviços finalizados, instrumento limpo e pronto para retirada',
-          entregue: 'Instrumento entregue ao músico com sucesso',
-          cancelado: 'Ordem de serviço cancelada',
-        };
-
-        const newTimelineEvent = {
-          id: 'tl-' + Date.now(),
-          timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
-          type: 'status_change' as const,
-          title: `Status alterado para ${nextStatus.toUpperCase()}`,
-          description: note || statusDescriptions[nextStatus],
-          user: userLabel,
-        };
-
-        // If completed or delivered, set dates
-        const completedDate = nextStatus === 'pronto' ? new Date().toISOString().substring(0, 10) : order.completedDate;
-        const deliveredDate = nextStatus === 'entregue' ? new Date().toISOString().substring(0, 10) : order.deliveredDate;
-
-        // If moving to 'em_execucao', automatically deduct parts used from stock
-        if (nextStatus === 'em_execucao') {
-          order.services.forEach((service) => {
-            service.partsUsed.forEach((part) => {
-              updateStockQuantity(
-                part.stockItemId,
-                -part.quantity,
-                `Baixa automática: OS #${order.orderNumber} em execução`,
-                order.id
-              );
-            });
-          });
-        }
-
-        // If delivered, play celebratory confetti
-        if (nextStatus === 'pronto' || nextStatus === 'entregue') {
-          try {
-            confetti({
-              particleCount: 50,
-              spread: 60,
-              origin: { y: 0.8 },
-            });
-          } catch {
-            // ignore
-          }
-        }
-
-        // Setup undo toast
-        showToast({
-          title: `OS #${order.orderNumber} avançou para ${nextStatus}`,
-          description: 'Alteração registrada na linha do tempo.',
-          type: 'success',
-          undoLabel: 'Desfazer',
-          undoAction: () => {
-            setOrders((current) =>
-              current.map((item) => (item.id === orderId ? previousOrder : item))
-            );
-            showToast({
-              title: `OS #${order.orderNumber} restaurada`,
-              description: `Status voltou para ${previousOrder.status}`,
-              type: 'info',
-            });
-          },
-        });
-
-        if (syncStatus === 'offline') {
-          setOfflineQueueCount((c) => c + 1);
-        }
-
-        return prev.map((item) =>
-          item.id === orderId
-            ? {
-                ...item,
-                status: nextStatus,
-                completedDate,
-                deliveredDate,
-                timeline: [newTimelineEvent, ...item.timeline],
-              }
-            : item
-        );
+      showToast({
+        title: `OS #${order.orderNumber} avançou para ${target}`,
+        description: deductNow
+          ? 'Peças baixadas do estoque. Alteração registrada na linha do tempo.'
+          : 'Alteração registrada na linha do tempo.',
+        type: 'success',
+        ...undo,
       });
+
+      if (syncStatus === 'offline') {
+        setOfflineQueueCount((c) => c + 1);
+      }
     },
-    [currentRole, triggerHaptic, showToast, updateStockQuantity, syncStatus]
+    [currentRole, triggerHaptic, showToast, commitOrder, deductParts, syncStatus]
   );
 
   const updateOrder = useCallback((orderId: string, updates: Partial<Order>) => {
