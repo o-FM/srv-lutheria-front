@@ -34,6 +34,7 @@ import {
   writeString,
 } from '../utils/storage';
 import { newId } from '../utils/ids';
+import { addDays, nowTimestamp, todayDate } from '../utils/dates';
 import { getRolePermissions } from '../utils/permissions';
 import {
   buildPendingQuote,
@@ -378,7 +379,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({
         id: newId('mov'),
         stockItemId,
         stockItemName: item.name,
-        date: new Date().toISOString().replace('T', ' ').substring(0, 16),
+        date: nowTimestamp(),
         type: applied > 0 ? 'entrada' : applied < 0 ? 'saida' : 'ajuste',
         quantity: Math.abs(applied),
         orderId,
@@ -464,7 +465,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({
 
       const newTimelineEvent = {
         id: newId('tl'),
-        timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
+        timestamp: nowTimestamp(),
         type: 'status_change' as const,
         title: `Status alterado para ${target.toUpperCase()}`,
         description: note || STATUS_DESCRIPTIONS[target],
@@ -474,8 +475,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({
       const updated: Order = {
         ...order,
         status: target,
-        completedDate: target === 'pronto' ? new Date().toISOString().substring(0, 10) : order.completedDate,
-        deliveredDate: target === 'entregue' ? new Date().toISOString().substring(0, 10) : order.deliveredDate,
+        completedDate: target === 'pronto' ? todayDate() : order.completedDate,
+        deliveredDate: target === 'entregue' ? todayDate() : order.deliveredDate,
         partsDeducted: alreadyDeducted || deductNow,
         quote:
           target === 'aguardando_aprovacao' && !order.quote ? buildPendingQuote(order) : order.quote,
@@ -602,7 +603,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({
       const newPhoto: Photo = {
         ...photoData,
         id: newId('ph'),
-        timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
+        timestamp: nowTimestamp(),
       };
 
       setOrders((prev) =>
@@ -657,7 +658,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({
         return;
       }
 
-      const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 16);
+      const timestamp = nowTimestamp();
       const deductNow = !isPartsDeducted(order);
 
       const updated: Order = {
@@ -712,7 +713,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({
       setOrders((prev) =>
         prev.map((order) => {
           if (order.id !== orderId) return order;
-          const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 16);
+          const timestamp = nowTimestamp();
           return {
             ...order,
             quote: order.quote
@@ -772,10 +773,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({
         priority: orderData.priority || 'normal',
         reportedIssue: orderData.reportedIssue || 'Revisão e regulagem geral',
         diagnosisNotes: orderData.diagnosisNotes || '',
-        entryDate: new Date().toISOString().substring(0, 10),
+        entryDate: todayDate(),
         estimatedDeliveryDate:
           orderData.estimatedDeliveryDate ||
-          new Date(Date.now() + 5 * 24 * 3600 * 1000).toISOString().substring(0, 10),
+          addDays(5),
         services,
         quote: {
           id: 'qt-' + nextNumber,
@@ -791,7 +792,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({
         timeline: [
           {
             id: newId('tl'),
-            timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
+            timestamp: nowTimestamp(),
             type: 'status_change',
             title: 'Ordem de Serviço Aberta',
             description: `OS #${nextNumber} criada na recepção com previsão de 5 dias úteis.`,
@@ -827,7 +828,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({
       const newClient: Client = {
         ...clientData,
         id: newId('cli'),
-        createdAt: new Date().toISOString().substring(0, 10),
+        createdAt: todayDate(),
       };
       setClients((prev) => [newClient, ...prev]);
       showToast({
@@ -846,7 +847,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({
         ...instrumentData,
         id: newId('inst'),
         photos,
-        createdAt: new Date().toISOString().substring(0, 10),
+        createdAt: todayDate(),
       };
       setInstruments((prev) => [newInst, ...prev]);
       showToast({

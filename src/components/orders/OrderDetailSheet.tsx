@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { OrderStatus, ServiceItem } from '../../types';
 import { canApproveQuote, remainingBalance } from '../../domain/orderRules';
+import { nowTimestamp } from '../../utils/dates';
 import { usePermissions } from '../../hooks/usePermissions';
 
 const STATUS_STEPS: { status: OrderStatus; label: string }[] = [
@@ -177,7 +178,7 @@ export const OrderDetailSheet: React.FC = () => {
       instrumentDescription: `${instrument?.brand} ${instrument?.model}`,
       amount: val,
       method: paymentMethod,
-      date: new Date().toISOString().replace('T', ' ').substring(0, 16),
+      date: nowTimestamp(),
       status: 'concluido',
     });
     setIsPaymentModalOpen(false);

@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { InstrumentType, Photo, ServiceItem } from '../../types';
 import { newId } from '../../utils/ids';
+import { addDays, nowTimestamp } from '../../utils/dates';
 import { isPlainObject, readJson, removeKeys, writeJson } from '../../utils/storage';
 
 const COMMON_SERVICES = [
@@ -189,7 +190,7 @@ const NewOrderWizardContent: React.FC = () => {
         url,
         tag,
         caption: caption || 'Foto de entrada na oficina',
-        timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
+        timestamp: nowTimestamp(),
       };
       setPhotos((prev) => [newPh, ...prev]);
     }, 'entrada');
@@ -286,11 +287,7 @@ const NewOrderWizardContent: React.FC = () => {
       });
     }
 
-    const estimatedDate = new Date(
-      Date.now() + estimatedDeliveryDays * 24 * 3600 * 1000
-    )
-      .toISOString()
-      .substring(0, 10);
+    const estimatedDate = addDays(estimatedDeliveryDays);
 
     const created = createOrder(
       {
