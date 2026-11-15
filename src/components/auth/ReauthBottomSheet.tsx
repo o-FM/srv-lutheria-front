@@ -38,8 +38,8 @@ export const ReauthBottomSheet: React.FC = () => {
     if (reauthModal.isOpen) {
       if (reauthModal.actionType === 'SENSITIVE_UPDATE' && user) {
         setIdentifier(user.email);
-      } else if (reauthModal.targetRole) {
-        // Pre-fill target role hint if switching
+      } else if (reauthModal.targetRole && import.meta.env.DEV) {
+        // Só em desenvolvimento: preenche o e-mail da persona demo de destino
         const targetEmails = {
           luthier: 'armando.luthier@oficina.com',
           atendente: 'mariana.balcao@oficina.com',
@@ -226,13 +226,15 @@ export const ReauthBottomSheet: React.FC = () => {
               </div>
             </div>
 
-            {/* Hint for demo passwords */}
-            <div className="p-2.5 rounded-xl bg-stone-950/60 border border-stone-800/80 text-[11px] text-stone-400">
-              <span className="font-semibold text-stone-300">Senhas de teste: </span>
-              Luthier: <code className="text-amber-400 font-mono">Luthier@2026</code> ·
-              Balcão: <code className="text-amber-400 font-mono">Balcao@2026</code> ·
-              Cliente: <code className="text-amber-400 font-mono">Cliente@2026</code>
-            </div>
+            {/* Senhas demo: só em desenvolvimento */}
+            {import.meta.env.DEV && (
+              <div className="p-2.5 rounded-xl bg-stone-950/60 border border-stone-800/80 text-[11px] text-stone-400">
+                <span className="font-semibold text-stone-300">Senhas de teste: </span>
+                Luthier: <code className="text-amber-400 font-mono">Luthier@2026</code> ·
+                Balcão: <code className="text-amber-400 font-mono">Balcao@2026</code> ·
+                Cliente: <code className="text-amber-400 font-mono">Cliente@2026</code>
+              </div>
+            )}
 
             {/* Actions */}
             <div className="pt-2 flex items-center gap-2">

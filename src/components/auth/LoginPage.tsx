@@ -322,7 +322,8 @@ export const LoginPage: React.FC = () => {
           </div>
         </form>
 
-        {/* Demo Accounts Quick-Select Card */}
+        {/* Demo Accounts Quick-Select Card: só em desenvolvimento (senhas não vão para o bundle de produção) */}
+        {import.meta.env.DEV && (
         <div className="pt-3 border-t border-stone-800/80 space-y-2">
           <p className="text-[11px] font-bold text-stone-400 uppercase tracking-wider text-center">
             Contas de Teste Rápidas (1 toque):
@@ -357,6 +358,7 @@ export const LoginPage: React.FC = () => {
             Ou teste usando CPF com máscara: <span className="font-mono text-stone-400">123.456.789-09</span>
           </p>
         </div>
+        )}
       </div>
 
       {/* Footer Info & LGPD notice */}
