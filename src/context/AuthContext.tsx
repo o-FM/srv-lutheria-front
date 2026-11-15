@@ -87,6 +87,8 @@ interface AuthContextType {
   isForgotPasswordOpen: boolean;
   setIsForgotPasswordOpen: (open: boolean) => void;
   updateUserInMemory: (user: AuthUser) => void;
+  /** Usuário que acabou de assumir a sessão por troca de perfil (para o aviso na tela). */
+  profileSwitchedTo: AuthUser | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -108,6 +110,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isAccountSettingsOpen, setIsAccountSettingsOpen] = useState(false);
   const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
+  const [profileSwitchedTo, setProfileSwitchedTo] = useState<AuthUser | null>(null);
 
   const [reauthModal, setReauthModal] = useState<ReauthModalState>({
     isOpen: false,
@@ -175,6 +178,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     async (identifier: string, pass: string, remember: boolean): Promise<AuthUser> => {
       const res = await authApi.login(identifier, pass, remember);
       persistSession(res.token, res.user, remember);
+      setProfileSwitchedTo(null);
       setToken(res.token);
       setUser(res.user);
       return res.user;
@@ -192,6 +196,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
     clearStoredSession();
     clearBusinessData();
+    setProfileSwitchedTo(null);
     setToken(null);
     setUser(null);
     setIsAccountSettingsOpen(false);
@@ -253,6 +258,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       // Mantém a sessão na mesma storage em que estava ("manter conectado" continua valendo).
       persistSession(res.token, res.user, isRememberedSession());
+      setProfileSwitchedTo(res.user);
       setToken(res.token);
       setUser(res.user);
 
@@ -290,6 +296,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         isForgotPasswordOpen,
         setIsForgotPasswordOpen,
         updateUserInMemory,
+        profileSwitchedTo,
       }}
     >
       {children}

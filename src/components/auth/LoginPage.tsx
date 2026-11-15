@@ -18,7 +18,7 @@ import {
 
 export const LoginPage: React.FC = () => {
   const { login, setIsForgotPasswordOpen } = useAuth();
-  const { setRole, triggerHaptic, syncStatus } = useApp();
+  const { triggerHaptic, syncStatus } = useApp();
 
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -111,9 +111,7 @@ export const LoginPage: React.FC = () => {
     setGeneralError(null);
 
     try {
-      const loggedUser = await login(identifier, password, rememberMe);
-      // Sync AppContext's currentRole with the logged user role
-      setRole(loggedUser.role);
+      await login(identifier, password, rememberMe);
     } catch (err: any) {
       triggerHaptic();
       if (err.locked) {

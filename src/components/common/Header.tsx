@@ -21,7 +21,6 @@ export const Header: React.FC = () => {
   const { user, logout, requestReauthentication, setIsAccountSettingsOpen } = useAuth();
   const {
     currentRole,
-    setRole,
     syncStatus,
     toggleSyncStatus,
     offlineQueueCount,

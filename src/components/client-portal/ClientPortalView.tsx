@@ -25,7 +25,6 @@ export const ClientPortalView: React.FC = () => {
     clients,
     approveQuote,
     rejectQuote,
-    setRole,
     triggerHaptic,
     showToast,
   } = useApp();

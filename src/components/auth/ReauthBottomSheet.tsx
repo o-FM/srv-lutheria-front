@@ -23,7 +23,7 @@ export const ReauthBottomSheet: React.FC = () => {
     confirmReauthSuccess,
     switchProfileWithTicket,
   } = useAuth();
-  const { setRole, triggerHaptic, showToast, syncStatus } = useApp();
+  const { triggerHaptic, syncStatus } = useApp();
 
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -103,14 +103,8 @@ export const ReauthBottomSheet: React.FC = () => {
       triggerHaptic();
 
       if (reauthModal.actionType === 'SWITCH_PROFILE') {
-        // Switch profile on server, invalidate old session, clear memory/cache
-        const newUser = await switchProfileWithTicket(res.ticket);
-        setRole(newUser.role);
-        showToast({
-          title: 'Perfil Alterado com Sucesso',
-          description: `Sessão ativa: ${newUser.name} (${newUser.role.toUpperCase()})`,
-          type: 'success',
-        });
+        // Troca no servidor; o AppProvider remonta para o novo usuário e mostra o aviso.
+        await switchProfileWithTicket(res.ticket);
       }
 
       confirmReauthSuccess(res.ticket);

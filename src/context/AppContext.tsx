@@ -69,7 +69,6 @@ interface AppContextType {
   barcodeCallback: ((code: string) => void) | null;
 
   // Actions
-  setRole: (role: UserRole) => void;
   setActiveTab: (tab: string) => void;
   setSearchQuery: (query: string) => void;
   addRecentSearch: (query: string) => void;
@@ -129,12 +128,15 @@ interface AppProviderProps {
   initialRole?: UserRole;
   /** Sem usuário logado, nada é gravado no aparelho (o logout apagou os dados). */
   isPersistenceEnabled?: boolean;
+  /** Toast exibido uma vez quando o provider monta. */
+  initialNotice?: Omit<ToastMessage, 'id'> | null;
 }
 
 export const AppProvider: React.FC<AppProviderProps> = ({
   children,
   initialRole = 'luthier',
   isPersistenceEnabled = true,
+  initialNotice = null,
 }) => {
   // Load from localStorage or seed (JSON corrompido volta para as seeds)
   const [clients, setClients] = useState<Client[]>(() =>
@@ -162,7 +164,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({
   );
 
   // UI state
-  const [currentRole, setRoleState] = useState<UserRole>(initialRole);
+  // O papel vem do usuário logado; trocar de usuário remonta o provider.
+  const currentRole: UserRole = initialRole;
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('online');
   const [offlineQueueCount, setOfflineQueueCount] = useState<number>(0);
   const [activeTab, setActiveTab] = useState<string>('hoje');
@@ -286,23 +289,13 @@ export const AppProvider: React.FC<AppProviderProps> = ({
     });
   }, [triggerHaptic, showToast]);
 
-  const setRole = useCallback(
-    (role: UserRole) => {
-      setRoleState(role);
-      triggerHaptic();
-      const roleLabels: Record<UserRole, string> = {
-        luthier: 'Luthier / Dono (Bancada & Gestão)',
-        atendente: 'Atendente / Balcão (Recepção & OS Rápida)',
-        cliente: 'Visão do Cliente (Portal sem senha)',
-      };
-      showToast({
-        title: `Perfil alterado para ${roleLabels[role]}`,
-        type: 'info',
-        duration: 2500,
-      });
-    },
-    [triggerHaptic, showToast]
-  );
+  // Aviso vindo de fora do provider (ex.: troca de perfil), mostrado uma vez ao montar.
+  const initialNoticeShownRef = useRef(false);
+  useEffect(() => {
+    if (!initialNotice || initialNoticeShownRef.current) return;
+    initialNoticeShownRef.current = true;
+    showToast(initialNotice);
+  }, [initialNotice, showToast]);
 
   const addRecentSearch = useCallback((query: string) => {
     if (!query.trim()) return;
@@ -908,7 +901,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({
         cameraCallback,
         isBarcodeModalOpen,
         barcodeCallback,
-        setRole,
         setActiveTab,
         setSearchQuery,
         addRecentSearch,

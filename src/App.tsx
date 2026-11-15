@@ -20,6 +20,7 @@ import { ClientPortalView } from './components/client-portal/ClientPortalView';
 import { ReauthBottomSheet } from './components/auth/ReauthBottomSheet';
 import { AccountSettingsModal } from './components/auth/AccountSettingsModal';
 import { ForgotPasswordModal } from './components/auth/ForgotPasswordModal';
+import { getRolePermissions } from './utils/permissions';
 
 const MainLayout: React.FC = () => {
   const { activeTab, setActiveTab, currentRole } = useApp();
@@ -72,12 +73,22 @@ const MainLayout: React.FC = () => {
 // Remonta o contexto de dados a cada troca de usuário: o estado em memória de um
 // usuário (OS aberta, busca, modais, dados após logout) nunca passa para o próximo.
 const AppProviderKeyed: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user } = useAuth();
+  const { user, profileSwitchedTo } = useAuth();
+  const switchNotice =
+    profileSwitchedTo && profileSwitchedTo.id === user?.id
+      ? {
+          title: 'Perfil alterado com sucesso',
+          description: `Sessão ativa: ${profileSwitchedTo.name} (${getRolePermissions(profileSwitchedTo.role).roleLabel})`,
+          type: 'success' as const,
+        }
+      : null;
+
   return (
     <AppProvider
       key={user?.id ?? 'anon'}
       initialRole={user?.role ?? 'luthier'}
       isPersistenceEnabled={!!user}
+      initialNotice={switchNotice}
     >
       {children}
     </AppProvider>
