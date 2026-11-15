@@ -16,6 +16,7 @@ import {
   LogOut,
 } from 'lucide-react';
 import { UserRole } from '../../types';
+import { usePermissions } from '../../hooks/usePermissions';
 
 export const Header: React.FC = () => {
   const { user, logout, requestReauthentication, setIsAccountSettingsOpen } = useAuth();
@@ -30,6 +31,7 @@ export const Header: React.FC = () => {
     setIsWorkbenchModeOpen,
     resetToDefaults,
   } = useApp();
+  const permissions = usePermissions();
 
   const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
 
@@ -239,7 +241,7 @@ export const Header: React.FC = () => {
                       </button>
                     </div>
 
-                    {currentRole === 'luthier' && (
+                    {permissions.canResetDemoData && (
                       <div className="mt-1 pt-1 border-t border-stone-800/60 flex items-center justify-between px-1">
                         <button
                           type="button"

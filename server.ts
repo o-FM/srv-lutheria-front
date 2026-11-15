@@ -2,6 +2,26 @@ import express, { Request, Response, NextFunction } from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import crypto from 'crypto';
+import { getRolePermissions, type RolePermissions } from './src/utils/permissions';
+
+type PermissionFlag = {
+  [K in keyof RolePermissions]: RolePermissions[K] extends boolean ? K : never;
+}[keyof RolePermissions];
+
+// Ação de domínio → permissão exigida (mesmos nomes de ROLE_PERMISSIONS).
+const ACTION_POLICY: Record<string, PermissionFlag> = {
+  VIEW_FINANCIALS: 'canViewFinancialTotals',
+  MANAGE_STOCK: 'canManageInventory',
+  WORKBENCH_EXECUTION: 'canExecuteBenchLabor',
+  VIEW_AUDIT_LOGS: 'canViewAuditLogs',
+  RESET_DEMO_DATA: 'canResetDemoData',
+  MODIFY_PRICING: 'canModifyPricingAndParts',
+  APPROVE_QUOTE: 'canApproveClientQuote',
+  OPEN_ORDER: 'canOpenOrder',
+  REGISTER_CLIENT: 'canRegisterClient',
+  REGISTER_ENTRY_PHOTO: 'canRegisterEntryPhoto',
+  REGISTER_DELIVERY: 'canRegisterDelivery',
+};
 
 interface UserRecord {
   id: string;
@@ -534,25 +554,8 @@ async function startServer() {
       return res.status(401).json({ error: 'Não autenticado' });
     }
 
-    const role = session.role;
-    const permissions = {
-      role,
-      isAdmin: role === 'luthier',
-      canAccessToday: role === 'luthier' || role === 'atendente',
-      canAccessOrders: role === 'luthier' || role === 'atendente',
-      canAccessClients: role === 'luthier' || role === 'atendente',
-      canAccessStock: role === 'luthier', // Exclusive to Luthier/Admin
-      canAccessFinancials: role === 'luthier', // Exclusive to Luthier/Admin
-      canAccessAgenda: role === 'luthier' || role === 'atendente',
-      canAccessMessages: role === 'luthier' || role === 'atendente',
-      canAccessConfig: role === 'luthier', // Exclusive to Luthier/Admin
-      canAccessWorkbench: role === 'luthier', // Exclusive to Luthier/Admin
-      canAccessClientPortal: role === 'cliente' || role === 'luthier',
-      canRegisterDelivery: role === 'luthier' || role === 'atendente',
-      canRegisterEntry: role === 'luthier' || role === 'atendente',
-      canPerformBenchLabor: role === 'luthier',
-    };
-
+    // Mesma tabela usada pela interface (src/utils/permissions.ts): uma única fonte.
+    const permissions = { ...getRolePermissions(session.role), isAdmin: session.role === 'luthier' };
     return res.json({ permissions });
   });
 
@@ -563,20 +566,17 @@ async function startServer() {
       return res.status(401).json({ error: 'Não autenticado' });
     }
 
-    const { action } = req.body;
-    const adminOnlyActions = [
-      'VIEW_FINANCIALS',
-      'MANAGE_STOCK',
-      'WORKBENCH_EXECUTION',
-      'VIEW_AUDIT_LOGS',
-      'RESET_DEMO_DATA',
-      'MODIFY_PRICING',
-    ];
+    const action: unknown = req.body?.action;
+    const flag = typeof action === 'string' ? ACTION_POLICY[action] : undefined;
 
-    if (adminOnlyActions.includes(action) && session.role !== 'luthier') {
-      logAudit('RBAC_REJECT', 'BLOCKED', session.userId, req, undefined, `Ação restrita bloqueada: ${action}`);
+    // Nega por padrão: ação desconhecida ou papel sem a permissão correspondente.
+    if (!flag || !getRolePermissions(session.role)[flag]) {
+      const label = typeof action === 'string' ? action.slice(0, 64) : 'inválida';
+      logAudit('RBAC_REJECT', 'BLOCKED', session.userId, req, undefined, `Ação bloqueada: ${label}`);
       return res.status(403).json({
-        error: `Ação '${action}' requer permissão de Administrador (Luthier / Dono).`,
+        error: flag
+          ? `Ação '${label}' não é permitida para o seu perfil.`
+          : `Ação '${label}' desconhecida.`,
         allowed: false,
       });
     }

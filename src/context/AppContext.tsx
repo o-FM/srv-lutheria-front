@@ -32,6 +32,7 @@ import {
   writeString,
 } from '../utils/storage';
 import { newId } from '../utils/ids';
+import { getRolePermissions } from '../utils/permissions';
 import {
   buildPendingQuote,
   canApproveQuote,
@@ -99,7 +100,8 @@ interface AppContextType {
   createInstrument: (instrumentData: Omit<Instrument, 'id' | 'createdAt' | 'photos'>, photos?: Photo[]) => Instrument;
 
   updateStockQuantity: (stockItemId: string, delta: number, reason: string, orderId?: string) => void;
-  recordPayment: (payment: Omit<Payment, 'id' | 'receiptNumber'>) => Payment;
+  /** Devolve `null` quando o papel atual não pode registrar pagamento. */
+  recordPayment: (payment: Omit<Payment, 'id' | 'receiptNumber'>) => Payment | null;
 
   openCamera: (callback: (photoUrl: string, caption?: string) => void) => void;
   closeCamera: () => void;
@@ -166,6 +168,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({
   // UI state
   // O papel vem do usuário logado; trocar de usuário remonta o provider.
   const currentRole: UserRole = initialRole;
+  const permissions = getRolePermissions(currentRole);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('online');
   const [offlineQueueCount, setOfflineQueueCount] = useState<number>(0);
   const [activeTab, setActiveTab] = useState<string>('hoje');
@@ -315,8 +318,22 @@ export const AppProvider: React.FC<AppProviderProps> = ({
     stockRef.current = stock;
   }, [stock]);
 
-  // Update Stock with log
-  const updateStockQuantity = useCallback(
+  // Avisa e devolve false quando o papel atual não pode executar a ação.
+  const denyUnless = useCallback(
+    (allowed: boolean, action: string): boolean => {
+      if (allowed) return true;
+      showToast({
+        title: 'Ação não permitida para o seu perfil',
+        description: `${action} é exclusivo do Luthier / Dono.`,
+        type: 'warning',
+      });
+      return false;
+    },
+    [showToast]
+  );
+
+  // Movimento de estoque (uso interno: baixas automáticas das transições de OS).
+  const applyStockDelta = useCallback(
     (stockItemId: string, delta: number, reason: string, orderId?: string) => {
       const item = stockRef.current.find((s) => s.id === stockItemId);
       if (!item) {
@@ -356,6 +373,15 @@ export const AppProvider: React.FC<AppProviderProps> = ({
     [showToast]
   );
 
+  // Ajuste manual de estoque (tela de Estoque): exige permissão.
+  const updateStockQuantity = useCallback(
+    (stockItemId: string, delta: number, reason: string, orderId?: string) => {
+      if (!denyUnless(permissions.canManageInventory, 'Movimentar estoque')) return;
+      applyStockDelta(stockItemId, delta, reason, orderId);
+    },
+    [denyUnless, permissions.canManageInventory, applyStockDelta]
+  );
+
   // Leitura síncrona das OS para validar antes de alterar (sem efeitos dentro de setOrders).
   const ordersRef = useRef(orders);
   useEffect(() => {
@@ -370,10 +396,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({
   const deductParts = useCallback(
     (order: Order, reason: string) => {
       partsToDeduct(order).forEach((part) =>
-        updateStockQuantity(part.stockItemId, -part.quantity, reason, order.id)
+        applyStockDelta(part.stockItemId, -part.quantity, reason, order.id)
       );
     },
-    [updateStockQuantity]
+    [applyStockDelta]
   );
 
   // Advance Order Status
@@ -479,6 +505,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({
 
   const addServiceItem = useCallback(
     (orderId: string, serviceData: Omit<ServiceItem, 'id'>) => {
+      if (!denyUnless(permissions.canModifyPricingAndParts, 'Alterar serviços e preços')) return;
       const newService: ServiceItem = {
         ...serviceData,
         id: newId('srv'),
@@ -511,7 +538,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({
         })
       );
     },
-    []
+    [denyUnless, permissions.canModifyPricingAndParts]
   );
 
   const toggleServiceDone = useCallback(
@@ -574,6 +601,14 @@ export const AppProvider: React.FC<AppProviderProps> = ({
   const approveQuote = useCallback(
     (orderId: string) => {
       triggerHaptic();
+      if (!permissions.canApproveClientQuote) {
+        showToast({
+          title: 'Ação não permitida para o seu perfil',
+          description: 'A aprovação do orçamento é feita pelo cliente ou pelo Luthier / Dono.',
+          type: 'warning',
+        });
+        return;
+      }
 
       const order = ordersRef.current.find((o) => o.id === orderId);
       if (!order || !order.quote || !canApproveQuote(order)) {
@@ -631,7 +666,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({
         type: 'success',
       });
     },
-    [triggerHaptic, commitOrder, deductParts, currentRole, showToast]
+    [triggerHaptic, commitOrder, deductParts, currentRole, showToast, permissions.canApproveClientQuote]
   );
 
   const rejectQuote = useCallback(
@@ -789,6 +824,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({
   const recordPayment = useCallback(
     (paymentData: Omit<Payment, 'id' | 'receiptNumber'>) => {
       triggerHaptic();
+      if (!permissions.canRegisterDelivery) {
+        showToast({ title: 'Ação não permitida para o seu perfil', type: 'warning' });
+        return null;
+      }
       const receiptNumber = 'REC-2026-' + (payments.length + 100);
       const newPayment: Payment = {
         ...paymentData,
@@ -839,7 +878,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({
 
       return newPayment;
     },
-    [payments.length, currentRole, triggerHaptic, showToast]
+    [payments.length, currentRole, triggerHaptic, showToast, permissions.canRegisterDelivery]
   );
 
   const openCamera = useCallback((callback: (photoUrl: string, caption?: string) => void) => {
@@ -863,6 +902,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({
   }, []);
 
   const resetToDefaults = useCallback(() => {
+    if (!denyUnless(permissions.canResetDemoData, 'Restaurar dados de demonstração')) return;
     removeKeys(BUSINESS_DATA_KEYS);
     setClients(INITIAL_CLIENTS);
     setInstruments(INITIAL_INSTRUMENTS);
@@ -874,7 +914,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({
       title: 'Dados restaurados para o padrão de demonstração!',
       type: 'info',
     });
-  }, [showToast]);
+  }, [showToast, denyUnless, permissions.canResetDemoData]);
 
   return (
     <AppContext.Provider

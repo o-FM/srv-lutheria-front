@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { OrderStatus, ServiceItem } from '../../types';
 import { canApproveQuote } from '../../domain/orderRules';
+import { usePermissions } from '../../hooks/usePermissions';
 
 const STATUS_STEPS: { status: OrderStatus; label: string }[] = [
   { status: 'recebido', label: 'Recebido' },
@@ -54,6 +55,7 @@ export const OrderDetailSheet: React.FC = () => {
     triggerHaptic,
     showToast,
   } = useApp();
+  const permissions = usePermissions();
 
   const [activeTab, setActiveTab] = useState<'servicos' | 'fotos' | 'orcamento' | 'historico'>('servicos');
   const [isAddingService, setIsAddingService] = useState(false);
@@ -492,6 +494,10 @@ export const OrderDetailSheet: React.FC = () => {
                 </div>
 
                 <div className="space-y-1.5 text-xs pt-1 border-t border-stone-800">
+                  {/* Composição de preço (mão de obra, peças, desconto) só para quem precifica.
+                      O balcão vê total, pago e saldo, que precisa para cobrar na entrega. */}
+                  {permissions.canViewFinancialTotals && (
+                  <>
                   <div className="flex justify-between text-stone-300">
                     <span>Mão de Obra ({order.services.length} serviços):</span>
                     <span className="font-semibold">
@@ -518,6 +524,8 @@ export const OrderDetailSheet: React.FC = () => {
                       <span>- R$ {order.quote.discount.toFixed(2)}</span>
                     </div>
                   ) : null}
+                  </>
+                  )}
                   <div className="flex justify-between text-base font-bold text-white pt-2 border-t border-stone-800">
                     <span>Valor Total da OS:</span>
                     <span className="text-amber-400 font-mono">
@@ -549,7 +557,7 @@ export const OrderDetailSheet: React.FC = () => {
                     Enviar Orçamento WhatsApp
                   </button>
 
-                  {canApproveQuote(order) && (
+                  {permissions.canApproveClientQuote && canApproveQuote(order) && (
                     <button
                       type="button"
                       onClick={() => approveQuote(order.id)}
