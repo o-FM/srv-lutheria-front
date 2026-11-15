@@ -17,6 +17,7 @@ import {
   Tag,
 } from 'lucide-react';
 import { InstrumentType, Photo, ServiceItem } from '../../types';
+import { newId } from '../../utils/ids';
 
 const COMMON_SERVICES = [
   {
@@ -171,7 +172,7 @@ export const NewOrderWizardModal: React.FC = () => {
     triggerHaptic();
     openCamera((url, caption) => {
       const newPh: Photo = {
-        id: 'ph-' + Date.now(),
+        id: newId('ph'),
         url,
         tag: 'entrada',
         caption: caption || 'Foto de entrada na oficina',
@@ -238,7 +239,7 @@ export const NewOrderWizardModal: React.FC = () => {
     const finalServices: ServiceItem[] = selectedServices
       .filter((s) => s.selected)
       .map((s, idx) => ({
-        id: 'srv-' + Date.now() + '-' + idx,
+        id: newId('srv'),
         title: s.title,
         laborPrice: s.laborPrice,
         done: false,
@@ -248,7 +249,7 @@ export const NewOrderWizardModal: React.FC = () => {
     // If no service selected, create one with default
     if (finalServices.length === 0) {
       finalServices.push({
-        id: 'srv-' + Date.now(),
+        id: newId('srv'),
         title: 'Diagnóstico e Regulagem Padrão',
         laborPrice: 150,
         done: false,

@@ -31,6 +31,7 @@ import {
   writeJson,
   writeString,
 } from '../utils/storage';
+import { newId } from '../utils/ids';
 import {
   buildPendingQuote,
   canApproveQuote,
@@ -302,35 +303,51 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setRecentSearches([]);
   }, []);
 
+  // Leitura síncrona do estoque: várias baixas no mesmo clique enxergam o saldo já atualizado.
+  const stockRef = useRef(stock);
+  useEffect(() => {
+    stockRef.current = stock;
+  }, [stock]);
+
   // Update Stock with log
   const updateStockQuantity = useCallback(
     (stockItemId: string, delta: number, reason: string, orderId?: string) => {
-      setStock((prev) =>
-        prev.map((item) => {
-          if (item.id === stockItemId) {
-            const newQty = Math.max(0, item.currentQuantity + delta);
-            return { ...item, currentQuantity: newQty };
-          }
-          return item;
-        })
-      );
-
-      const targetItem = stock.find((s) => s.id === stockItemId);
-      if (targetItem) {
-        const movement: StockMovement = {
-          id: 'mov-' + Date.now(),
-          stockItemId,
-          stockItemName: targetItem.name,
-          date: new Date().toISOString().replace('T', ' ').substring(0, 16),
-          type: delta > 0 ? 'entrada' : delta < 0 ? 'saida' : 'ajuste',
-          quantity: Math.abs(delta),
-          orderId,
-          reason,
-        };
-        setStockMovements((prev) => [movement, ...prev]);
+      const item = stockRef.current.find((s) => s.id === stockItemId);
+      if (!item) {
+        showToast({ title: 'Item de estoque não encontrado', type: 'warning' });
+        return;
       }
+
+      const newQty = Math.max(0, item.currentQuantity + delta);
+      const applied = newQty - item.currentQuantity;
+
+      if (delta < 0 && applied !== delta) {
+        showToast({
+          title: `Estoque insuficiente: ${item.name}`,
+          description: `Pedido: ${Math.abs(delta)} · Disponível: ${item.currentQuantity}. Baixadas ${Math.abs(applied)}.`,
+          type: 'warning',
+        });
+      }
+
+      if (applied === 0 && delta !== 0) return;
+
+      const updatedItem = { ...item, currentQuantity: newQty };
+      stockRef.current = stockRef.current.map((s) => (s.id === stockItemId ? updatedItem : s));
+      setStock((prev) => prev.map((s) => (s.id === stockItemId ? updatedItem : s)));
+
+      const movement: StockMovement = {
+        id: newId('mov'),
+        stockItemId,
+        stockItemName: item.name,
+        date: new Date().toISOString().replace('T', ' ').substring(0, 16),
+        type: applied > 0 ? 'entrada' : applied < 0 ? 'saida' : 'ajuste',
+        quantity: Math.abs(applied),
+        orderId,
+        reason,
+      };
+      setStockMovements((prev) => [movement, ...prev]);
     },
-    [stock]
+    [showToast]
   );
 
   // Leitura síncrona das OS para validar antes de alterar (sem efeitos dentro de setOrders).
@@ -385,7 +402,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           : 'Cliente';
 
       const newTimelineEvent = {
-        id: 'tl-' + Date.now(),
+        id: newId('tl'),
         timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
         type: 'status_change' as const,
         title: `Status alterado para ${target.toUpperCase()}`,
@@ -458,7 +475,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     (orderId: string, serviceData: Omit<ServiceItem, 'id'>) => {
       const newService: ServiceItem = {
         ...serviceData,
-        id: 'srv-' + Date.now(),
+        id: newId('srv'),
       };
 
       setOrders((prev) =>
@@ -514,7 +531,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     (orderId: string, photoData: Omit<Photo, 'id' | 'timestamp'>) => {
       const newPhoto: Photo = {
         ...photoData,
-        id: 'ph-' + Date.now(),
+        id: newId('ph'),
         timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
       };
 
@@ -526,7 +543,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             photos: [newPhoto, ...order.photos],
             timeline: [
               {
-                id: 'tl-' + Date.now(),
+                id: newId('tl'),
                 timestamp: newPhoto.timestamp,
                 type: 'photo_added',
                 title: `Nova foto adicionada: ${newPhoto.tag}`,
@@ -572,7 +589,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         quote: { ...order.quote, status: 'aprovado', answeredAt: timestamp },
         timeline: [
           {
-            id: 'tl-' + Date.now(),
+            id: newId('tl'),
             timestamp,
             type: 'quote_approved',
             title: 'Orçamento APROVADO pelo cliente',
@@ -580,7 +597,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             user: currentRole === 'cliente' ? 'Cliente (Portal)' : 'Mariana (Balcão)',
           },
           {
-            id: 'tl-exec-' + Date.now(),
+            id: newId('tl-exec'),
             timestamp,
             type: 'status_change',
             title: 'Status: EM EXECUÇÃO',
@@ -630,7 +647,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               : undefined,
             timeline: [
               {
-                id: 'tl-' + Date.now(),
+                id: newId('tl'),
                 timestamp,
                 type: 'quote_rejected',
                 title: 'Orçamento Recusado',
@@ -695,7 +712,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         photos: orderData.photos || [],
         timeline: [
           {
-            id: 'tl-' + Date.now(),
+            id: newId('tl'),
             timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
             type: 'status_change',
             title: 'Ordem de Serviço Aberta',
@@ -731,7 +748,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       triggerHaptic();
       const newClient: Client = {
         ...clientData,
-        id: 'cli-' + Date.now(),
+        id: newId('cli'),
         createdAt: new Date().toISOString().substring(0, 10),
       };
       setClients((prev) => [newClient, ...prev]);
@@ -749,7 +766,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       triggerHaptic();
       const newInst: Instrument = {
         ...instrumentData,
-        id: 'inst-' + Date.now(),
+        id: newId('inst'),
         photos,
         createdAt: new Date().toISOString().substring(0, 10),
       };
@@ -769,7 +786,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const receiptNumber = 'REC-2026-' + (payments.length + 100);
       const newPayment: Payment = {
         ...paymentData,
-        id: 'pay-' + Date.now(),
+        id: newId('pay'),
         receiptNumber,
       };
 
@@ -785,7 +802,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             paidAmount: updatedPaid,
             timeline: [
               {
-                id: 'tl-' + Date.now(),
+                id: newId('tl'),
                 timestamp: paymentData.date,
                 type: 'payment_received',
                 title: `Pagamento recebido: R$ ${paymentData.amount.toFixed(2)} (${paymentData.method.toUpperCase()})`,
