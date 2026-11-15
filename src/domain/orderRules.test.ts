@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Order, OrderStatus, Quote } from '../types';
 import {
   buildPendingQuote,
+  canApproveQuote,
   canTransition,
   isPartsDeducted,
   nextStatus,
@@ -112,6 +113,22 @@ describe('isPartsDeducted', () => {
     expect(isPartsDeducted(makeOrder('em_execucao'))).toBe(true);
     expect(isPartsDeducted(makeOrder('entregue'))).toBe(true);
     expect(isPartsDeducted(makeOrder('orcamento'))).toBe(false);
+  });
+});
+
+describe('canApproveQuote', () => {
+  it('permite aprovar orçamento pendente aguardando aprovação', () => {
+    expect(canApproveQuote(makeOrder('aguardando_aprovacao', { quote: pendingQuote }))).toBe(true);
+  });
+
+  it('não aprova fora de aguardando_aprovacao', () => {
+    expect(canApproveQuote(makeOrder('entregue', { quote: pendingQuote }))).toBe(false);
+    expect(canApproveQuote(makeOrder('orcamento', { quote: pendingQuote }))).toBe(false);
+  });
+
+  it('não aprova duas vezes nem sem orçamento', () => {
+    expect(canApproveQuote(makeOrder('aguardando_aprovacao', { quote: approvedQuote }))).toBe(false);
+    expect(canApproveQuote(makeOrder('aguardando_aprovacao'))).toBe(false);
   });
 });
 

@@ -33,6 +33,7 @@ import {
 } from '../utils/storage';
 import {
   buildPendingQuote,
+  canApproveQuote,
   canTransition,
   isPartsDeducted,
   nextStatus,
@@ -550,65 +551,56 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const approveQuote = useCallback(
     (orderId: string) => {
       triggerHaptic();
-      try {
-        confetti({
-          particleCount: 70,
-          spread: 70,
-          origin: { y: 0.6 },
+
+      const order = ordersRef.current.find((o) => o.id === orderId);
+      if (!order || !order.quote || !canApproveQuote(order)) {
+        showToast({
+          title: 'Orçamento não pode ser aprovado agora',
+          description: 'Só é possível aprovar um orçamento pendente com a OS aguardando aprovação.',
+          type: 'warning',
         });
+        return;
+      }
+
+      const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 16);
+      const deductNow = !isPartsDeducted(order);
+
+      const updated: Order = {
+        ...order,
+        status: 'em_execucao',
+        partsDeducted: true,
+        quote: { ...order.quote, status: 'aprovado', answeredAt: timestamp },
+        timeline: [
+          {
+            id: 'tl-' + Date.now(),
+            timestamp,
+            type: 'quote_approved',
+            title: 'Orçamento APROVADO pelo cliente',
+            description: 'Autorização recebida com sucesso. OS liberada para execução na bancada.',
+            user: currentRole === 'cliente' ? 'Cliente (Portal)' : 'Mariana (Balcão)',
+          },
+          {
+            id: 'tl-exec-' + Date.now(),
+            timestamp,
+            type: 'status_change',
+            title: 'Status: EM EXECUÇÃO',
+            description: 'Instrumento pronto para receber os serviços cadastrados.',
+            user: 'Sistema Luthieria',
+          },
+          ...order.timeline,
+        ],
+      };
+      commitOrder(updated);
+
+      if (deductNow) {
+        deductParts(order, `Aprovação de orçamento OS #${order.orderNumber}`);
+      }
+
+      try {
+        confetti({ particleCount: 70, spread: 70, origin: { y: 0.6 } });
       } catch {
         // ignore
       }
-
-      setOrders((prev) =>
-        prev.map((order) => {
-          if (order.id !== orderId) return order;
-          const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 16);
-
-          // Deduct parts
-          order.services.forEach((service) => {
-            service.partsUsed.forEach((part) => {
-              updateStockQuantity(
-                part.stockItemId,
-                -part.quantity,
-                `Aprovação de orçamento OS #${order.orderNumber}`,
-                order.id
-              );
-            });
-          });
-
-          return {
-            ...order,
-            status: 'em_execucao',
-            quote: order.quote
-              ? {
-                  ...order.quote,
-                  status: 'aprovado',
-                  answeredAt: timestamp,
-                }
-              : undefined,
-            timeline: [
-              {
-                id: 'tl-' + Date.now(),
-                timestamp,
-                type: 'quote_approved',
-                title: 'Orçamento APROVADO pelo cliente',
-                description: 'Autorização recebida com sucesso. OS liberada para execução na bancada.',
-                user: currentRole === 'cliente' ? 'Cliente (Portal)' : 'Mariana (Balcão)',
-              },
-              {
-                id: 'tl-exec-' + Date.now(),
-                timestamp,
-                type: 'status_change',
-                title: 'Status: EM EXECUÇÃO',
-                description: 'Instrumento pronto para receber os serviços cadastrados.',
-                user: 'Sistema Luthieria',
-              },
-              ...order.timeline,
-            ],
-          };
-        })
-      );
 
       showToast({
         title: 'Orçamento Aprovado!',
@@ -616,7 +608,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         type: 'success',
       });
     },
-    [triggerHaptic, updateStockQuantity, currentRole, showToast]
+    [triggerHaptic, commitOrder, deductParts, currentRole, showToast]
   );
 
   const rejectQuote = useCallback(

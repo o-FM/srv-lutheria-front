@@ -66,6 +66,15 @@ export function canTransition(
   return { ok: false, reason: 'Avance a OS um passo por vez.' };
 }
 
+/** O orçamento só pode ser aprovado uma vez, com a OS aguardando aprovação. */
+export function canApproveQuote(order: Order): boolean {
+  return (
+    order.status === 'aguardando_aprovacao' &&
+    order.quote !== undefined &&
+    order.quote.status !== 'aprovado'
+  );
+}
+
 /**
  * Indica se as peças da OS já saíram do estoque. OS antigas (sem a marcação)
  * que já passaram de `aguardando_aprovacao` são consideradas baixadas.

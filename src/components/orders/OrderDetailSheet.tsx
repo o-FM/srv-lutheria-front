@@ -23,6 +23,7 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import { OrderStatus, ServiceItem } from '../../types';
+import { canApproveQuote } from '../../domain/orderRules';
 
 const STATUS_STEPS: { status: OrderStatus; label: string }[] = [
   { status: 'recebido', label: 'Recebido' },
@@ -548,7 +549,7 @@ export const OrderDetailSheet: React.FC = () => {
                     Enviar Orçamento WhatsApp
                   </button>
 
-                  {order.quote?.status !== 'aprovado' && (
+                  {canApproveQuote(order) && (
                     <button
                       type="button"
                       onClick={() => approveQuote(order.id)}

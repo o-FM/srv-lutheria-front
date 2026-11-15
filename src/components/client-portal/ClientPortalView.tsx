@@ -15,6 +15,7 @@ import {
   ArrowLeft,
 } from 'lucide-react';
 import { OrderStatus } from '../../types';
+import { canApproveQuote } from '../../domain/orderRules';
 
 export const ClientPortalView: React.FC = () => {
   const { user, requestReauthentication } = useAuth();
@@ -219,7 +220,7 @@ export const ClientPortalView: React.FC = () => {
       </div>
 
       {/* Quote Approval Box (Huge Thumb Action if Waiting Approval) */}
-      {order.status === 'aguardando_aprovacao' && (
+      {canApproveQuote(order) && (
         <div className="p-5 rounded-3xl bg-gradient-to-br from-amber-950/80 via-stone-900 to-stone-950 border-2 border-amber-600 shadow-2xl space-y-4 animate-in fade-in">
           <div className="flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-amber-400" />
