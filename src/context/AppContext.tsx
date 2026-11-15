@@ -13,6 +13,8 @@ import {
   ToastMessage,
   Photo,
   ServiceItem,
+  PhotoTag,
+  CameraCallback,
 } from '../types';
 import {
   INITIAL_CLIENTS,
@@ -65,7 +67,8 @@ interface AppContextType {
 
   // Modals & Camera Callbacks
   isCameraModalOpen: boolean;
-  cameraCallback: ((photoUrl: string, caption?: string) => void) | null;
+  cameraCallback: CameraCallback | null;
+  cameraDefaultTag: PhotoTag;
   isBarcodeModalOpen: boolean;
   barcodeCallback: ((code: string) => void) | null;
 
@@ -103,7 +106,8 @@ interface AppContextType {
   /** Devolve `null` quando o papel atual não pode registrar pagamento. */
   recordPayment: (payment: Omit<Payment, 'id' | 'receiptNumber'>) => Payment | null;
 
-  openCamera: (callback: (photoUrl: string, caption?: string) => void) => void;
+  /** Abre a câmera com a categoria padrão de quem chamou (o usuário pode trocar). */
+  openCamera: (callback: CameraCallback, defaultTag?: PhotoTag) => void;
   closeCamera: () => void;
   openBarcodeScanner: (callback: (code: string) => void) => void;
   closeBarcodeScanner: () => void;
@@ -192,7 +196,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({
 
   // Modals
   const [isCameraModalOpen, setIsCameraModalOpen] = useState<boolean>(false);
-  const [cameraCallback, setCameraCallback] = useState<((photoUrl: string, caption?: string) => void) | null>(null);
+  const [cameraCallback, setCameraCallback] = useState<CameraCallback | null>(null);
+  const [cameraDefaultTag, setCameraDefaultTag] = useState<PhotoTag>('bancada');
   const [isBarcodeModalOpen, setIsBarcodeModalOpen] = useState<boolean>(false);
   const [barcodeCallback, setBarcodeCallback] = useState<((code: string) => void) | null>(null);
 
@@ -881,8 +886,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({
     [payments.length, currentRole, triggerHaptic, showToast, permissions.canRegisterDelivery]
   );
 
-  const openCamera = useCallback((callback: (photoUrl: string, caption?: string) => void) => {
+  const openCamera = useCallback((callback: CameraCallback, defaultTag: PhotoTag = 'bancada') => {
     setCameraCallback(() => callback);
+    setCameraDefaultTag(defaultTag);
     setIsCameraModalOpen(true);
   }, []);
 
@@ -939,6 +945,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({
         toasts,
         isCameraModalOpen,
         cameraCallback,
+        cameraDefaultTag,
         isBarcodeModalOpen,
         barcodeCallback,
         setActiveTab,

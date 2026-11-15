@@ -28,6 +28,11 @@ export interface Photo {
   timestamp: string;
 }
 
+export type PhotoTag = Photo['tag'];
+
+/** Retorno da câmera: imagem, legenda e a categoria escolhida pelo usuário. */
+export type CameraCallback = (photoUrl: string, caption: string, tag: PhotoTag) => void;
+
 export interface Client {
   id: string;
   name: string;

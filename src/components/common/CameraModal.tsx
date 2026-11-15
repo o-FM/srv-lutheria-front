@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { downscaleToDataUrl } from '../../utils/image';
+import type { PhotoTag } from '../../types';
 import {
   Camera,
   X,
@@ -46,33 +47,51 @@ const PRESET_PHOTOS = [
   },
 ];
 
+const stopStream = (stream: MediaStream | null) => {
+  stream?.getTracks().forEach((track) => track.stop());
+};
+
+// Casca: o conteúdo é montado a cada abertura (estado limpo) e desmontado ao fechar.
 export const CameraModal: React.FC = () => {
-  const { isCameraModalOpen, closeCamera, cameraCallback, triggerHaptic, showToast } = useApp();
+  const { isCameraModalOpen } = useApp();
+  if (!isCameraModalOpen) return null;
+  return <CameraContent />;
+};
+
+const CameraContent: React.FC = () => {
+  const { closeCamera, cameraCallback, cameraDefaultTag, triggerHaptic, showToast } = useApp();
 
   const [selectedPhotoUrl, setSelectedPhotoUrl] = useState<string | null>(null);
   const [caption, setCaption] = useState<string>('');
-  const [tag, setTag] = useState<'entrada' | 'diagnostico' | 'bancada' | 'finalizado' | 'detalhe_defeito'>('bancada');
+  const [tag, setTag] = useState<PhotoTag>(cameraDefaultTag);
   const [isWebcamActive, setIsWebcamActive] = useState<boolean>(false);
   const [isListening, setIsListening] = useState<boolean>(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const nativeCameraInputRef = useRef<HTMLInputElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const isMountedRef = useRef(true);
 
-  // Stop webcam on close
+  // Ao fechar (desmontar), desliga a câmera.
   useEffect(() => {
-    if (!isCameraModalOpen) {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
-        streamRef.current = null;
-      }
-      setIsWebcamActive(false);
-      setSelectedPhotoUrl(null);
-      setCaption('');
-    }
-  }, [isCameraModalOpen]);
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      stopStream(streamRef.current);
+      streamRef.current = null;
+    };
+  }, []);
 
-  if (!isCameraModalOpen) return null;
+  // O <video> só existe depois que isWebcamActive vira true: liga o stream aqui.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!isWebcamActive || !video || !streamRef.current) return;
+    video.srcObject = streamRef.current;
+    video.play().catch(() => {
+      // autoplay bloqueado: o usuário ainda pode usar galeria ou câmera nativa
+    });
+  }, [isWebcamActive]);
 
   const startWebcam = async () => {
     try {
@@ -80,11 +99,12 @@ export const CameraModal: React.FC = () => {
         video: { facingMode: 'environment', width: { ideal: 1280 } },
         audio: false,
       });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
+      // A câmera foi fechada enquanto o navegador pedia permissão: não deixa a câmera ligada.
+      if (!isMountedRef.current) {
+        stopStream(stream);
+        return;
       }
+      streamRef.current = stream;
       setIsWebcamActive(true);
     } catch {
       showToast({
@@ -171,7 +191,7 @@ export const CameraModal: React.FC = () => {
     if (!selectedPhotoUrl) return;
     triggerHaptic();
     if (cameraCallback) {
-      cameraCallback(selectedPhotoUrl, caption || 'Registro fotográfico da bancada');
+      cameraCallback(selectedPhotoUrl, caption.trim(), tag);
     }
     closeCamera();
   };
@@ -257,9 +277,8 @@ export const CameraModal: React.FC = () => {
               <button
                 type="button"
                 onClick={() => {
-                  if (streamRef.current) {
-                    streamRef.current.getTracks().forEach((t) => t.stop());
-                  }
+                  stopStream(streamRef.current);
+                  streamRef.current = null;
                   setIsWebcamActive(false);
                 }}
                 className="flex items-center justify-center gap-2 py-3 px-3 rounded-xl bg-stone-800 text-stone-300 text-xs font-semibold"
@@ -276,8 +295,25 @@ export const CameraModal: React.FC = () => {
               <Upload className="w-4 h-4 text-amber-400" />
               Galeria / Arquivo
             </button>
+            {/* Galeria: sem `capture`, para o celular oferecer as fotos já tiradas */}
             <input
               ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+
+            <button
+              type="button"
+              onClick={() => nativeCameraInputRef.current?.click()}
+              className="col-span-2 flex items-center justify-center gap-2 py-3 px-3 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs font-semibold border border-stone-700 active:scale-95 transition-all"
+            >
+              <Camera className="w-4 h-4 text-amber-400" />
+              Câmera Nativa do Celular
+            </button>
+            <input
+              ref={nativeCameraInputRef}
               type="file"
               accept="image/*"
               capture="environment"

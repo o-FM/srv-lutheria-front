@@ -103,13 +103,13 @@ export const OrderDetailSheet: React.FC = () => {
       ? 'Foto de entrada / avarias no balcão'
       : 'Foto registrada na bancada';
 
-    openCamera((url, caption) => {
+    openCamera((url, caption, chosenTag) => {
       addOrderPhoto(order.id, {
         url,
-        tag,
+        tag: chosenTag,
         caption: caption || defaultCaption,
       });
-    });
+    }, tag);
   };
 
   const handleStepClick = (targetStatus: OrderStatus) => {

@@ -183,16 +183,16 @@ const NewOrderWizardContent: React.FC = () => {
 
   const handleTakePhoto = () => {
     triggerHaptic();
-    openCamera((url, caption) => {
+    openCamera((url, caption, tag) => {
       const newPh: Photo = {
         id: newId('ph'),
         url,
-        tag: 'entrada',
+        tag,
         caption: caption || 'Foto de entrada na oficina',
         timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
       };
       setPhotos((prev) => [newPh, ...prev]);
-    });
+    }, 'entrada');
   };
 
   // Os passos 1 e 2 só validam. Cliente e instrumento novos são criados apenas em

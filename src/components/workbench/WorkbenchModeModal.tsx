@@ -83,15 +83,15 @@ const WorkbenchContent: React.FC = () => {
 
   const handleTakePhoto = () => {
     triggerHaptic();
-    openCamera((url, caption) => {
+    openCamera((url, caption, tag) => {
       if (currentOrder) {
         addOrderPhoto(currentOrder.id, {
           url,
-          tag: 'bancada',
+          tag,
           caption: caption || 'Registro rápido na bancada de trabalho',
         });
       }
-    });
+    }, 'bancada');
   };
 
   return (
