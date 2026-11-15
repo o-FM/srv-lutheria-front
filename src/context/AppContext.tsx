@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import confetti from 'canvas-confetti';
 import {
   Client,
@@ -13,6 +13,8 @@ import {
   ToastMessage,
   Photo,
   ServiceItem,
+  PhotoTag,
+  CameraCallback,
 } from '../types';
 import {
   INITIAL_CLIENTS,
@@ -22,6 +24,29 @@ import {
   INITIAL_PAYMENTS,
   INITIAL_MOVEMENTS,
 } from '../data/seedData';
+import {
+  BUSINESS_DATA_KEYS,
+  isArray,
+  readJson,
+  readString,
+  removeKeys,
+  writeJson,
+  writeString,
+} from '../utils/storage';
+import { newId } from '../utils/ids';
+import { addDays, nowTimestamp, todayDate } from '../utils/dates';
+import { computeOrderTotals } from '../domain/totals';
+import { getRolePermissions } from '../utils/permissions';
+import {
+  buildPendingQuote,
+  DEFAULT_PAYMENT_TERMS,
+  canApproveQuote,
+  canTransition,
+  isPartsDeducted,
+  nextStatus,
+  partsToDeduct,
+  remainingBalance,
+} from '../domain/orderRules';
 
 interface AppContextType {
   // State
@@ -39,6 +64,10 @@ interface AppContextType {
   recentSearches: string[];
   isSearchOpen: boolean;
   activeOrderId: string | null;
+  /** Pedido para a OS aberta mostrar o formulário de pagamento (consumido pelo sheet). */
+  orderSheetFocus: 'pagamento' | null;
+  /** Ficha de cliente aberta na aba Clientes (também usada pela busca global). */
+  activeClientId: string | null;
   isNewOrderWizardOpen: boolean;
   isWorkbenchModeOpen: boolean;
   isDarkMode: boolean;
@@ -46,18 +75,20 @@ interface AppContextType {
 
   // Modals & Camera Callbacks
   isCameraModalOpen: boolean;
-  cameraCallback: ((photoUrl: string, caption?: string) => void) | null;
+  cameraCallback: CameraCallback | null;
+  cameraDefaultTag: PhotoTag;
   isBarcodeModalOpen: boolean;
   barcodeCallback: ((code: string) => void) | null;
 
   // Actions
-  setRole: (role: UserRole) => void;
   setActiveTab: (tab: string) => void;
   setSearchQuery: (query: string) => void;
   addRecentSearch: (query: string) => void;
   clearRecentSearches: () => void;
   setIsSearchOpen: (open: boolean) => void;
   setActiveOrderId: (id: string | null) => void;
+  setOrderSheetFocus: (focus: 'pagamento' | null) => void;
+  setActiveClientId: (id: string | null) => void;
   setIsNewOrderWizardOpen: (open: boolean) => void;
   setIsWorkbenchModeOpen: (open: boolean) => void;
   toggleDarkMode: () => void;
@@ -76,15 +107,19 @@ interface AppContextType {
   toggleServiceDone: (orderId: string, serviceId: string) => void;
   addOrderPhoto: (orderId: string, photo: Omit<Photo, 'id' | 'timestamp'>) => void;
   approveQuote: (orderId: string) => void;
+  /** Entrega a OS. Com saldo em aberto, não entrega: abre a OS no pagamento. */
+  deliverOrder: (orderId: string, note?: string) => void;
   rejectQuote: (orderId: string, reason: string) => void;
 
   createClient: (clientData: Omit<Client, 'id' | 'createdAt'>) => Client;
   createInstrument: (instrumentData: Omit<Instrument, 'id' | 'createdAt' | 'photos'>, photos?: Photo[]) => Instrument;
 
   updateStockQuantity: (stockItemId: string, delta: number, reason: string, orderId?: string) => void;
-  recordPayment: (payment: Omit<Payment, 'id' | 'receiptNumber'>) => Payment;
+  /** Devolve `null` quando o papel atual não pode registrar pagamento. */
+  recordPayment: (payment: Omit<Payment, 'id' | 'receiptNumber'>) => Payment | null;
 
-  openCamera: (callback: (photoUrl: string, caption?: string) => void) => void;
+  /** Abre a câmera com a categoria padrão de quem chamou (o usuário pode trocar). */
+  openCamera: (callback: CameraCallback, defaultTag?: PhotoTag) => void;
   closeCamera: () => void;
   openBarcodeScanner: (callback: (code: string) => void) => void;
   closeBarcodeScanner: () => void;
@@ -94,50 +129,67 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-const STATUS_FLOW: OrderStatus[] = [
-  'recebido',
-  'diagnostico',
-  'orcamento',
-  'aguardando_aprovacao',
-  'em_execucao',
-  'pronto',
-  'entregue',
-];
+const STATUS_DESCRIPTIONS: Record<OrderStatus, string> = {
+  recebido: 'Instrumento acolhido na recepção',
+  diagnostico: 'Instrumento posicionado na bancada para diagnóstico',
+  orcamento: 'Orçamento detalhado elaborado',
+  aguardando_aprovacao: 'Orçamento encaminhado para aprovação do cliente',
+  em_execucao: 'Mãos à obra! Serviços iniciados na bancada',
+  pronto: 'Serviços finalizados, instrumento limpo e pronto para retirada',
+  entregue: 'Instrumento entregue ao músico com sucesso',
+  cancelado: 'Ordem de serviço cancelada',
+};
 
-export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // Load from localStorage or seed
-  const [clients, setClients] = useState<Client[]>(() => {
-    const saved = localStorage.getItem('luthier_clients');
-    return saved ? JSON.parse(saved) : INITIAL_CLIENTS;
-  });
+interface AppProviderProps {
+  children: ReactNode;
+  /** Papel do usuário logado. O provider é remontado (key) a cada troca de usuário. */
+  initialRole?: UserRole;
+  /** Sem usuário logado, nada é gravado no aparelho (o logout apagou os dados). */
+  isPersistenceEnabled?: boolean;
+  /** Toast exibido uma vez quando o provider monta. */
+  initialNotice?: Omit<ToastMessage, 'id'> | null;
+  /** Nome do usuário logado, usado como autor dos eventos da timeline. */
+  currentUserName?: string;
+}
 
-  const [instruments, setInstruments] = useState<Instrument[]>(() => {
-    const saved = localStorage.getItem('luthier_instruments');
-    return saved ? JSON.parse(saved) : INITIAL_INSTRUMENTS;
-  });
+export const AppProvider: React.FC<AppProviderProps> = ({
+  children,
+  initialRole = 'luthier',
+  isPersistenceEnabled = true,
+  initialNotice = null,
+  currentUserName = '',
+}) => {
+  // Load from localStorage or seed (JSON corrompido volta para as seeds)
+  const [clients, setClients] = useState<Client[]>(() =>
+    readJson('luthier_clients', INITIAL_CLIENTS, isArray<Client>)
+  );
 
-  const [orders, setOrders] = useState<Order[]>(() => {
-    const saved = localStorage.getItem('luthier_orders');
-    return saved ? JSON.parse(saved) : INITIAL_ORDERS;
-  });
+  const [instruments, setInstruments] = useState<Instrument[]>(() =>
+    readJson('luthier_instruments', INITIAL_INSTRUMENTS, isArray<Instrument>)
+  );
 
-  const [stock, setStock] = useState<StockItem[]>(() => {
-    const saved = localStorage.getItem('luthier_stock');
-    return saved ? JSON.parse(saved) : INITIAL_STOCK;
-  });
+  const [orders, setOrders] = useState<Order[]>(() =>
+    readJson('luthier_orders', INITIAL_ORDERS, isArray<Order>)
+  );
 
-  const [payments, setPayments] = useState<Payment[]>(() => {
-    const saved = localStorage.getItem('luthier_payments');
-    return saved ? JSON.parse(saved) : INITIAL_PAYMENTS;
-  });
+  const [stock, setStock] = useState<StockItem[]>(() =>
+    readJson('luthier_stock', INITIAL_STOCK, isArray<StockItem>)
+  );
 
-  const [stockMovements, setStockMovements] = useState<StockMovement[]>(() => {
-    const saved = localStorage.getItem('luthier_movements');
-    return saved ? JSON.parse(saved) : INITIAL_MOVEMENTS;
-  });
+  const [payments, setPayments] = useState<Payment[]>(() =>
+    readJson('luthier_payments', INITIAL_PAYMENTS, isArray<Payment>)
+  );
+
+  const [stockMovements, setStockMovements] = useState<StockMovement[]>(() =>
+    readJson('luthier_movements', INITIAL_MOVEMENTS, isArray<StockMovement>)
+  );
 
   // UI state
-  const [currentRole, setRoleState] = useState<UserRole>('luthier');
+  // O papel vem do usuário logado; trocar de usuário remonta o provider.
+  const currentRole: UserRole = initialRole;
+  const permissions = getRolePermissions(currentRole);
+  // Autor da timeline: o usuário logado de verdade (o provider é remontado por usuário).
+  const actor = currentUserName ? `${currentUserName} (${permissions.roleLabel})` : permissions.roleLabel;
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('online');
   const [offlineQueueCount, setOfflineQueueCount] = useState<number>(0);
   const [activeTab, setActiveTab] = useState<string>('hoje');
@@ -150,48 +202,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   ]);
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
+  const [orderSheetFocus, setOrderSheetFocus] = useState<'pagamento' | null>(null);
+  const [activeClientId, setActiveClientId] = useState<string | null>(null);
   const [isNewOrderWizardOpen, setIsNewOrderWizardOpen] = useState<boolean>(false);
   const [isWorkbenchModeOpen, setIsWorkbenchModeOpen] = useState<boolean>(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   // Dark mode
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
-    return localStorage.getItem('luthier_dark_mode') === 'true';
+    return readString('luthier_dark_mode') === 'true';
   });
 
   // Modals
   const [isCameraModalOpen, setIsCameraModalOpen] = useState<boolean>(false);
-  const [cameraCallback, setCameraCallback] = useState<((photoUrl: string, caption?: string) => void) | null>(null);
+  const [cameraCallback, setCameraCallback] = useState<CameraCallback | null>(null);
+  const [cameraDefaultTag, setCameraDefaultTag] = useState<PhotoTag>('bancada');
   const [isBarcodeModalOpen, setIsBarcodeModalOpen] = useState<boolean>(false);
   const [barcodeCallback, setBarcodeCallback] = useState<((code: string) => void) | null>(null);
 
-  // Sync to localStorage
   useEffect(() => {
-    localStorage.setItem('luthier_clients', JSON.stringify(clients));
-  }, [clients]);
-
-  useEffect(() => {
-    localStorage.setItem('luthier_instruments', JSON.stringify(instruments));
-  }, [instruments]);
-
-  useEffect(() => {
-    localStorage.setItem('luthier_orders', JSON.stringify(orders));
-  }, [orders]);
-
-  useEffect(() => {
-    localStorage.setItem('luthier_stock', JSON.stringify(stock));
-  }, [stock]);
-
-  useEffect(() => {
-    localStorage.setItem('luthier_payments', JSON.stringify(payments));
-  }, [payments]);
-
-  useEffect(() => {
-    localStorage.setItem('luthier_movements', JSON.stringify(stockMovements));
-  }, [stockMovements]);
-
-  useEffect(() => {
-    localStorage.setItem('luthier_dark_mode', String(isDarkMode));
+    writeString('luthier_dark_mode', String(isDarkMode));
     if (isDarkMode) {
       document.documentElement.classList.add('dark');
     } else {
@@ -223,6 +253,35 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const dismissToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
+
+  // Sync to localStorage. Se a gravação falhar (cota cheia, storage bloqueado),
+  // avisa uma única vez até a próxima gravação bem-sucedida.
+  const storageWarnedRef = useRef(false);
+  const persist = useCallback(
+    (key: string, value: unknown) => {
+      if (!isPersistenceEnabled) return;
+      if (writeJson(key, value)) {
+        storageWarnedRef.current = false;
+        return;
+      }
+      if (storageWarnedRef.current) return;
+      storageWarnedRef.current = true;
+      showToast({
+        title: 'Armazenamento do aparelho cheio',
+        description: 'As últimas alterações não foram salvas. Remova fotos ou exporte dados.',
+        type: 'error',
+        duration: 8000,
+      });
+    },
+    [showToast, isPersistenceEnabled]
+  );
+
+  useEffect(() => persist('luthier_clients', clients), [persist, clients]);
+  useEffect(() => persist('luthier_instruments', instruments), [persist, instruments]);
+  useEffect(() => persist('luthier_orders', orders), [persist, orders]);
+  useEffect(() => persist('luthier_stock', stock), [persist, stock]);
+  useEffect(() => persist('luthier_payments', payments), [persist, payments]);
+  useEffect(() => persist('luthier_movements', stockMovements), [persist, stockMovements]);
 
   const toggleDarkMode = useCallback(() => {
     setIsDarkMode((prev) => !prev);
@@ -257,23 +316,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
   }, [triggerHaptic, showToast]);
 
-  const setRole = useCallback(
-    (role: UserRole) => {
-      setRoleState(role);
-      triggerHaptic();
-      const roleLabels: Record<UserRole, string> = {
-        luthier: 'Luthier / Dono (Bancada & Gestão)',
-        atendente: 'Atendente / Balcão (Recepção & OS Rápida)',
-        cliente: 'Visão do Cliente (Portal sem senha)',
-      };
-      showToast({
-        title: `Perfil alterado para ${roleLabels[role]}`,
-        type: 'info',
-        duration: 2500,
-      });
-    },
-    [triggerHaptic, showToast]
-  );
+  // Aviso vindo de fora do provider (ex.: troca de perfil), mostrado uma vez ao montar.
+  const initialNoticeShownRef = useRef(false);
+  useEffect(() => {
+    if (!initialNotice || initialNoticeShownRef.current) return;
+    initialNoticeShownRef.current = true;
+    showToast(initialNotice);
+  }, [initialNotice, showToast]);
 
   const addRecentSearch = useCallback((query: string) => {
     if (!query.trim()) return;
@@ -287,35 +336,94 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setRecentSearches([]);
   }, []);
 
-  // Update Stock with log
+  // Leitura síncrona do estoque: várias baixas no mesmo clique enxergam o saldo já atualizado.
+  const stockRef = useRef(stock);
+  useEffect(() => {
+    stockRef.current = stock;
+  }, [stock]);
+
+  // Avisa e devolve false quando o papel atual não pode executar a ação.
+  const denyUnless = useCallback(
+    (allowed: boolean, action: string): boolean => {
+      if (allowed) return true;
+      showToast({
+        title: 'Ação não permitida para o seu perfil',
+        description: `${action} é exclusivo do Luthier / Dono.`,
+        type: 'warning',
+      });
+      return false;
+    },
+    [showToast]
+  );
+
+  // Movimento de estoque (uso interno: baixas automáticas das transições de OS).
+  const applyStockDelta = useCallback(
+    (stockItemId: string, delta: number, reason: string, orderId?: string) => {
+      const item = stockRef.current.find((s) => s.id === stockItemId);
+      if (!item) {
+        showToast({ title: 'Item de estoque não encontrado', type: 'warning' });
+        return;
+      }
+
+      const newQty = Math.max(0, item.currentQuantity + delta);
+      const applied = newQty - item.currentQuantity;
+
+      if (delta < 0 && applied !== delta) {
+        showToast({
+          title: `Estoque insuficiente: ${item.name}`,
+          description: `Pedido: ${Math.abs(delta)} · Disponível: ${item.currentQuantity}. Baixadas ${Math.abs(applied)}.`,
+          type: 'warning',
+        });
+      }
+
+      if (applied === 0 && delta !== 0) return;
+
+      const updatedItem = { ...item, currentQuantity: newQty };
+      stockRef.current = stockRef.current.map((s) => (s.id === stockItemId ? updatedItem : s));
+      setStock((prev) => prev.map((s) => (s.id === stockItemId ? updatedItem : s)));
+
+      const movement: StockMovement = {
+        id: newId('mov'),
+        stockItemId,
+        stockItemName: item.name,
+        date: nowTimestamp(),
+        type: applied > 0 ? 'entrada' : applied < 0 ? 'saida' : 'ajuste',
+        quantity: Math.abs(applied),
+        orderId,
+        reason,
+      };
+      setStockMovements((prev) => [movement, ...prev]);
+    },
+    [showToast]
+  );
+
+  // Ajuste manual de estoque (tela de Estoque): exige permissão.
   const updateStockQuantity = useCallback(
     (stockItemId: string, delta: number, reason: string, orderId?: string) => {
-      setStock((prev) =>
-        prev.map((item) => {
-          if (item.id === stockItemId) {
-            const newQty = Math.max(0, item.currentQuantity + delta);
-            return { ...item, currentQuantity: newQty };
-          }
-          return item;
-        })
-      );
-
-      const targetItem = stock.find((s) => s.id === stockItemId);
-      if (targetItem) {
-        const movement: StockMovement = {
-          id: 'mov-' + Date.now(),
-          stockItemId,
-          stockItemName: targetItem.name,
-          date: new Date().toISOString().replace('T', ' ').substring(0, 16),
-          type: delta > 0 ? 'entrada' : delta < 0 ? 'saida' : 'ajuste',
-          quantity: Math.abs(delta),
-          orderId,
-          reason,
-        };
-        setStockMovements((prev) => [movement, ...prev]);
-      }
+      if (!denyUnless(permissions.canManageInventory, 'Movimentar estoque')) return;
+      applyStockDelta(stockItemId, delta, reason, orderId);
     },
-    [stock]
+    [denyUnless, permissions.canManageInventory, applyStockDelta]
+  );
+
+  // Leitura síncrona das OS para validar antes de alterar (sem efeitos dentro de setOrders).
+  const ordersRef = useRef(orders);
+  useEffect(() => {
+    ordersRef.current = orders;
+  }, [orders]);
+
+  const commitOrder = useCallback((updated: Order) => {
+    ordersRef.current = ordersRef.current.map((o) => (o.id === updated.id ? updated : o));
+    setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
+  }, []);
+
+  const deductParts = useCallback(
+    (order: Order, reason: string) => {
+      partsToDeduct(order).forEach((part) =>
+        applyStockDelta(part.stockItemId, -part.quantity, reason, order.id)
+      );
+    },
+    [applyStockDelta]
   );
 
   // Advance Order Status
@@ -323,128 +431,108 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     (orderId: string, specificStatus?: OrderStatus, note?: string) => {
       triggerHaptic();
 
-      setOrders((prev) => {
-        const order = prev.find((o) => o.id === orderId);
-        if (!order) return prev;
+      const order = ordersRef.current.find((o) => o.id === orderId);
+      if (!order) return;
 
-        const previousOrder = { ...order };
-        let nextStatus: OrderStatus;
+      const target = specificStatus ?? nextStatus(order.status);
+      if (!target) {
+        showToast({ title: `OS #${order.orderNumber} já foi finalizada`, type: 'info' });
+        return;
+      }
 
-        if (specificStatus) {
-          nextStatus = specificStatus;
-        } else {
-          const currentIndex = STATUS_FLOW.indexOf(order.status);
-          if (currentIndex < 0 || currentIndex >= STATUS_FLOW.length - 1) {
-            return prev; // already delivered or invalid
-          }
-          nextStatus = STATUS_FLOW[currentIndex + 1];
-        }
+      const check = canTransition(order, target, { allowStepBack: currentRole === 'luthier' });
+      if (!check.ok) {
+        showToast({ title: 'Mudança de status bloqueada', description: check.reason, type: 'warning' });
+        return;
+      }
 
-        // Business rule: Can only go to 'em_execucao' if quote is approved or no quote needed
-        if (nextStatus === 'em_execucao' && order.quote && order.quote.status !== 'aprovado') {
-          showToast({
-            title: 'Orçamento Pendente',
-            description: 'A OS só pode ir para execução após a aprovação formal do cliente.',
-            type: 'warning',
-          });
-          return prev;
-        }
-
-        // Timeline event title & user description
-        const userLabel =
-          currentRole === 'luthier'
-            ? 'Armando (Luthier)'
-            : currentRole === 'atendente'
-            ? 'Mariana (Balcão)'
-            : 'Cliente';
-
-        const statusDescriptions: Record<OrderStatus, string> = {
-          recebido: 'Instrumento acolhido na recepção',
-          diagnostico: 'Instrumento posicionado na bancada para diagnóstico',
-          orcamento: 'Orçamento detalhado elaborado',
-          aguardando_aprovacao: 'Orçamento encaminhado para aprovação do cliente',
-          em_execucao: 'Mãos à obra! Serviços iniciados na bancada',
-          pronto: 'Serviços finalizados, instrumento limpo e pronto para retirada',
-          entregue: 'Instrumento entregue ao músico com sucesso',
-          cancelado: 'Ordem de serviço cancelada',
-        };
-
-        const newTimelineEvent = {
-          id: 'tl-' + Date.now(),
-          timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
-          type: 'status_change' as const,
-          title: `Status alterado para ${nextStatus.toUpperCase()}`,
-          description: note || statusDescriptions[nextStatus],
-          user: userLabel,
-        };
-
-        // If completed or delivered, set dates
-        const completedDate = nextStatus === 'pronto' ? new Date().toISOString().substring(0, 10) : order.completedDate;
-        const deliveredDate = nextStatus === 'entregue' ? new Date().toISOString().substring(0, 10) : order.deliveredDate;
-
-        // If moving to 'em_execucao', automatically deduct parts used from stock
-        if (nextStatus === 'em_execucao') {
-          order.services.forEach((service) => {
-            service.partsUsed.forEach((part) => {
-              updateStockQuantity(
-                part.stockItemId,
-                -part.quantity,
-                `Baixa automática: OS #${order.orderNumber} em execução`,
-                order.id
-              );
-            });
-          });
-        }
-
-        // If delivered, play celebratory confetti
-        if (nextStatus === 'pronto' || nextStatus === 'entregue') {
-          try {
-            confetti({
-              particleCount: 50,
-              spread: 60,
-              origin: { y: 0.8 },
-            });
-          } catch {
-            // ignore
-          }
-        }
-
-        // Setup undo toast
+      // Entrega com saldo em aberto: primeiro o pagamento (abre a OS no formulário).
+      const balance = remainingBalance(order);
+      if (target === 'entregue' && balance > 0) {
         showToast({
-          title: `OS #${order.orderNumber} avançou para ${nextStatus}`,
-          description: 'Alteração registrada na linha do tempo.',
-          type: 'success',
-          undoLabel: 'Desfazer',
-          undoAction: () => {
-            setOrders((current) =>
-              current.map((item) => (item.id === orderId ? previousOrder : item))
-            );
-            showToast({
-              title: `OS #${order.orderNumber} restaurada`,
-              description: `Status voltou para ${previousOrder.status}`,
-              type: 'info',
-            });
-          },
+          title: 'Registre o pagamento antes da entrega',
+          description: `Saldo em aberto: R$ ${balance.toFixed(2)}.`,
+          type: 'warning',
         });
+        setActiveOrderId(orderId);
+        setOrderSheetFocus('pagamento');
+        return;
+      }
 
-        if (syncStatus === 'offline') {
-          setOfflineQueueCount((c) => c + 1);
+      const alreadyDeducted = isPartsDeducted(order);
+      const deductNow = target === 'em_execucao' && !alreadyDeducted;
+
+
+      const newTimelineEvent = {
+        id: newId('tl'),
+        timestamp: nowTimestamp(),
+        type: 'status_change' as const,
+        title: `Status alterado para ${target.toUpperCase()}`,
+        description: note || STATUS_DESCRIPTIONS[target],
+        user: actor,
+      };
+
+      const updated: Order = {
+        ...order,
+        status: target,
+        completedDate: target === 'pronto' ? todayDate() : order.completedDate,
+        deliveredDate: target === 'entregue' ? todayDate() : order.deliveredDate,
+        partsDeducted: alreadyDeducted || deductNow,
+        quote:
+          target === 'aguardando_aprovacao' && !order.quote ? buildPendingQuote(order) : order.quote,
+        timeline: [newTimelineEvent, ...order.timeline],
+      };
+      commitOrder(updated);
+
+      if (deductNow) {
+        deductParts(order, `Baixa automática: OS #${order.orderNumber} em execução`);
+      }
+
+      if (target === 'pronto' || target === 'entregue') {
+        try {
+          confetti({ particleCount: 50, spread: 60, origin: { y: 0.8 } });
+        } catch {
+          // ignore
         }
+      }
 
-        return prev.map((item) =>
-          item.id === orderId
-            ? {
-                ...item,
-                status: nextStatus,
-                completedDate,
-                deliveredDate,
-                timeline: [newTimelineEvent, ...item.timeline],
-              }
-            : item
-        );
+      // Desfazer só quando a transição não mexeu no estoque.
+      const undo = deductNow
+        ? {}
+        : {
+            undoLabel: 'Desfazer',
+            undoAction: () => {
+              commitOrder(order);
+              showToast({
+                title: `OS #${order.orderNumber} restaurada`,
+                description: `Status voltou para ${order.status}`,
+                type: 'info',
+              });
+            },
+          };
+
+      showToast({
+        title: `OS #${order.orderNumber} avançou para ${target}`,
+        description: deductNow
+          ? 'Peças baixadas do estoque. Alteração registrada na linha do tempo.'
+          : 'Alteração registrada na linha do tempo.',
+        type: 'success',
+        ...undo,
       });
+
+      if (syncStatus === 'offline') {
+        setOfflineQueueCount((c) => c + 1);
+      }
     },
-    [currentRole, triggerHaptic, showToast, updateStockQuantity, syncStatus]
+    [currentRole, triggerHaptic, showToast, commitOrder, deductParts, syncStatus]
+  );
+
+  const deliverOrder = useCallback(
+    (orderId: string, note = 'Entregue ao cliente no balcão') => {
+      if (!denyUnless(permissions.canRegisterDelivery, 'Registrar entrega')) return;
+      advanceOrderStatus(orderId, 'entregue', note);
+    },
+    [advanceOrderStatus, denyUnless, permissions.canRegisterDelivery]
   );
 
   const updateOrder = useCallback((orderId: string, updates: Partial<Order>) => {
@@ -455,39 +543,29 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const addServiceItem = useCallback(
     (orderId: string, serviceData: Omit<ServiceItem, 'id'>) => {
+      if (!denyUnless(permissions.canModifyPricingAndParts, 'Alterar serviços e preços')) return;
       const newService: ServiceItem = {
         ...serviceData,
-        id: 'srv-' + Date.now(),
+        id: newId('srv'),
       };
 
       setOrders((prev) =>
         prev.map((order) => {
           if (order.id !== orderId) return order;
           const updatedServices = [...order.services, newService];
-          const laborTotal = updatedServices.reduce((acc, s) => acc + s.laborPrice, 0);
-          const partsTotal = updatedServices.reduce(
-            (acc, s) => acc + s.partsUsed.reduce((pAcc, p) => pAcc + p.unitPrice * p.quantity, 0),
-            0
-          );
-          const grandTotal = laborTotal + partsTotal;
+          // totalAmount é sempre o total já com desconto (antes ignorava o desconto).
+          const totals = computeOrderTotals(updatedServices, order.quote?.discount ?? 0);
 
           return {
             ...order,
             services: updatedServices,
-            totalAmount: grandTotal,
-            quote: order.quote
-              ? {
-                  ...order.quote,
-                  laborTotal,
-                  partsTotal,
-                  grandTotal: grandTotal - (order.quote.discount || 0),
-                }
-              : order.quote,
+            totalAmount: totals.grandTotal,
+            quote: order.quote ? { ...order.quote, ...totals } : order.quote,
           };
         })
       );
     },
-    []
+    [denyUnless, permissions.canModifyPricingAndParts]
   );
 
   const toggleServiceDone = useCallback(
@@ -513,8 +591,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     (orderId: string, photoData: Omit<Photo, 'id' | 'timestamp'>) => {
       const newPhoto: Photo = {
         ...photoData,
-        id: 'ph-' + Date.now(),
-        timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
+        id: newId('ph'),
+        timestamp: nowTimestamp(),
       };
 
       setOrders((prev) =>
@@ -525,12 +603,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             photos: [newPhoto, ...order.photos],
             timeline: [
               {
-                id: 'tl-' + Date.now(),
+                id: newId('tl'),
                 timestamp: newPhoto.timestamp,
                 type: 'photo_added',
                 title: `Nova foto adicionada: ${newPhoto.tag}`,
                 description: newPhoto.caption,
-                user: currentRole === 'luthier' ? 'Armando (Luthier)' : 'Mariana (Balcão)',
+                user: actor,
               },
               ...order.timeline,
             ],
@@ -550,65 +628,64 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const approveQuote = useCallback(
     (orderId: string) => {
       triggerHaptic();
-      try {
-        confetti({
-          particleCount: 70,
-          spread: 70,
-          origin: { y: 0.6 },
+      if (!permissions.canApproveClientQuote) {
+        showToast({
+          title: 'Ação não permitida para o seu perfil',
+          description: 'A aprovação do orçamento é feita pelo cliente ou pelo Luthier / Dono.',
+          type: 'warning',
         });
+        return;
+      }
+
+      const order = ordersRef.current.find((o) => o.id === orderId);
+      if (!order || !order.quote || !canApproveQuote(order)) {
+        showToast({
+          title: 'Orçamento não pode ser aprovado agora',
+          description: 'Só é possível aprovar um orçamento pendente com a OS aguardando aprovação.',
+          type: 'warning',
+        });
+        return;
+      }
+
+      const timestamp = nowTimestamp();
+      const deductNow = !isPartsDeducted(order);
+
+      const updated: Order = {
+        ...order,
+        status: 'em_execucao',
+        partsDeducted: true,
+        quote: { ...order.quote, status: 'aprovado', answeredAt: timestamp },
+        timeline: [
+          {
+            id: newId('tl'),
+            timestamp,
+            type: 'quote_approved',
+            title: 'Orçamento APROVADO pelo cliente',
+            description: 'Autorização recebida com sucesso. OS liberada para execução na bancada.',
+            user: currentRole === 'cliente' ? `${actor} pelo portal` : actor,
+          },
+          {
+            id: newId('tl-exec'),
+            timestamp,
+            type: 'status_change',
+            title: 'Status: EM EXECUÇÃO',
+            description: 'Instrumento pronto para receber os serviços cadastrados.',
+            user: 'Sistema Luthieria',
+          },
+          ...order.timeline,
+        ],
+      };
+      commitOrder(updated);
+
+      if (deductNow) {
+        deductParts(order, `Aprovação de orçamento OS #${order.orderNumber}`);
+      }
+
+      try {
+        confetti({ particleCount: 70, spread: 70, origin: { y: 0.6 } });
       } catch {
         // ignore
       }
-
-      setOrders((prev) =>
-        prev.map((order) => {
-          if (order.id !== orderId) return order;
-          const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 16);
-
-          // Deduct parts
-          order.services.forEach((service) => {
-            service.partsUsed.forEach((part) => {
-              updateStockQuantity(
-                part.stockItemId,
-                -part.quantity,
-                `Aprovação de orçamento OS #${order.orderNumber}`,
-                order.id
-              );
-            });
-          });
-
-          return {
-            ...order,
-            status: 'em_execucao',
-            quote: order.quote
-              ? {
-                  ...order.quote,
-                  status: 'aprovado',
-                  answeredAt: timestamp,
-                }
-              : undefined,
-            timeline: [
-              {
-                id: 'tl-' + Date.now(),
-                timestamp,
-                type: 'quote_approved',
-                title: 'Orçamento APROVADO pelo cliente',
-                description: 'Autorização recebida com sucesso. OS liberada para execução na bancada.',
-                user: currentRole === 'cliente' ? 'Cliente (Portal)' : 'Mariana (Balcão)',
-              },
-              {
-                id: 'tl-exec-' + Date.now(),
-                timestamp,
-                type: 'status_change',
-                title: 'Status: EM EXECUÇÃO',
-                description: 'Instrumento pronto para receber os serviços cadastrados.',
-                user: 'Sistema Luthieria',
-              },
-              ...order.timeline,
-            ],
-          };
-        })
-      );
 
       showToast({
         title: 'Orçamento Aprovado!',
@@ -616,7 +693,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         type: 'success',
       });
     },
-    [triggerHaptic, updateStockQuantity, currentRole, showToast]
+    [triggerHaptic, commitOrder, deductParts, currentRole, showToast, permissions.canApproveClientQuote]
   );
 
   const rejectQuote = useCallback(
@@ -625,7 +702,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setOrders((prev) =>
         prev.map((order) => {
           if (order.id !== orderId) return order;
-          const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 16);
+          const timestamp = nowTimestamp();
           return {
             ...order,
             quote: order.quote
@@ -638,12 +715,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               : undefined,
             timeline: [
               {
-                id: 'tl-' + Date.now(),
+                id: newId('tl'),
                 timestamp,
                 type: 'quote_rejected',
                 title: 'Orçamento Recusado',
                 description: `Motivo: ${reason}`,
-                user: currentRole === 'cliente' ? 'Cliente' : 'Atendente',
+                user: currentRole === 'cliente' ? `${actor} pelo portal` : actor,
               },
               ...order.timeline,
             ],
@@ -669,12 +746,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const clientTrackingToken = `${tokenInitials}-${nextNumber}-${Math.floor(10 + Math.random() * 90)}`;
 
       const services = orderData.services || [];
-      const laborTotal = services.reduce((acc, s) => acc + s.laborPrice, 0);
-      const partsTotal = services.reduce(
-        (acc, s) => acc + s.partsUsed.reduce((pAcc, p) => pAcc + p.unitPrice * p.quantity, 0),
-        0
-      );
-      const totalAmount = laborTotal + partsTotal;
+      const totals = computeOrderTotals(services);
+      const totalAmount = totals.grandTotal;
 
       const newOrder: Order = {
         id: 'ord-' + nextNumber,
@@ -685,30 +758,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         priority: orderData.priority || 'normal',
         reportedIssue: orderData.reportedIssue || 'Revisão e regulagem geral',
         diagnosisNotes: orderData.diagnosisNotes || '',
-        entryDate: new Date().toISOString().substring(0, 10),
+        entryDate: todayDate(),
         estimatedDeliveryDate:
           orderData.estimatedDeliveryDate ||
-          new Date(Date.now() + 5 * 24 * 3600 * 1000).toISOString().substring(0, 10),
+          addDays(5),
         services,
         quote: {
           id: 'qt-' + nextNumber,
           orderId: 'ord-' + nextNumber,
-          laborTotal,
-          partsTotal,
-          discount: 0,
-          grandTotal: totalAmount,
+          ...totals,
           status: 'pendente',
-          paymentTerms: '50% entrada + 50% na entrega',
+          paymentTerms: DEFAULT_PAYMENT_TERMS,
         },
         photos: orderData.photos || [],
         timeline: [
           {
-            id: 'tl-' + Date.now(),
-            timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
+            id: newId('tl'),
+            timestamp: nowTimestamp(),
             type: 'status_change',
             title: 'Ordem de Serviço Aberta',
             description: `OS #${nextNumber} criada na recepção com previsão de 5 dias úteis.`,
-            user: currentRole === 'luthier' ? 'Armando (Luthier)' : 'Mariana (Balcão)',
+            user: actor,
           },
         ],
         technicianNotes: orderData.technicianNotes || '',
@@ -739,8 +809,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       triggerHaptic();
       const newClient: Client = {
         ...clientData,
-        id: 'cli-' + Date.now(),
-        createdAt: new Date().toISOString().substring(0, 10),
+        id: newId('cli'),
+        createdAt: todayDate(),
       };
       setClients((prev) => [newClient, ...prev]);
       showToast({
@@ -757,9 +827,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       triggerHaptic();
       const newInst: Instrument = {
         ...instrumentData,
-        id: 'inst-' + Date.now(),
+        id: newId('inst'),
         photos,
-        createdAt: new Date().toISOString().substring(0, 10),
+        createdAt: todayDate(),
       };
       setInstruments((prev) => [newInst, ...prev]);
       showToast({
@@ -774,10 +844,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const recordPayment = useCallback(
     (paymentData: Omit<Payment, 'id' | 'receiptNumber'>) => {
       triggerHaptic();
+      if (!permissions.canRegisterDelivery) {
+        showToast({ title: 'Ação não permitida para o seu perfil', type: 'warning' });
+        return null;
+      }
       const receiptNumber = 'REC-2026-' + (payments.length + 100);
       const newPayment: Payment = {
         ...paymentData,
-        id: 'pay-' + Date.now(),
+        id: newId('pay'),
         receiptNumber,
       };
 
@@ -793,12 +867,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             paidAmount: updatedPaid,
             timeline: [
               {
-                id: 'tl-' + Date.now(),
+                id: newId('tl'),
                 timestamp: paymentData.date,
                 type: 'payment_received',
                 title: `Pagamento recebido: R$ ${paymentData.amount.toFixed(2)} (${paymentData.method.toUpperCase()})`,
                 description: `Recibo gerado: ${receiptNumber}`,
-                user: currentRole === 'luthier' ? 'Armando (Luthier)' : 'Mariana (Balcão)',
+                user: actor,
               },
               ...order.timeline,
             ],
@@ -824,11 +898,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       return newPayment;
     },
-    [payments.length, currentRole, triggerHaptic, showToast]
+    [payments.length, currentRole, triggerHaptic, showToast, permissions.canRegisterDelivery]
   );
 
-  const openCamera = useCallback((callback: (photoUrl: string, caption?: string) => void) => {
+  const openCamera = useCallback((callback: CameraCallback, defaultTag: PhotoTag = 'bancada') => {
     setCameraCallback(() => callback);
+    setCameraDefaultTag(defaultTag);
     setIsCameraModalOpen(true);
   }, []);
 
@@ -848,12 +923,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, []);
 
   const resetToDefaults = useCallback(() => {
-    localStorage.removeItem('luthier_clients');
-    localStorage.removeItem('luthier_instruments');
-    localStorage.removeItem('luthier_orders');
-    localStorage.removeItem('luthier_stock');
-    localStorage.removeItem('luthier_payments');
-    localStorage.removeItem('luthier_movements');
+    if (!denyUnless(permissions.canResetDemoData, 'Restaurar dados de demonstração')) return;
+    removeKeys(BUSINESS_DATA_KEYS);
     setClients(INITIAL_CLIENTS);
     setInstruments(INITIAL_INSTRUMENTS);
     setOrders(INITIAL_ORDERS);
@@ -864,7 +935,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       title: 'Dados restaurados para o padrão de demonstração!',
       type: 'info',
     });
-  }, [showToast]);
+  }, [showToast, denyUnless, permissions.canResetDemoData]);
 
   return (
     <AppContext.Provider
@@ -889,9 +960,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         toasts,
         isCameraModalOpen,
         cameraCallback,
+        cameraDefaultTag,
         isBarcodeModalOpen,
         barcodeCallback,
-        setRole,
         setActiveTab,
         setSearchQuery,
         addRecentSearch,
@@ -912,6 +983,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         toggleServiceDone,
         addOrderPhoto,
         approveQuote,
+        deliverOrder,
+        orderSheetFocus,
+        setOrderSheetFocus,
+        activeClientId,
+        setActiveClientId,
         rejectQuote,
         createClient,
         createInstrument,

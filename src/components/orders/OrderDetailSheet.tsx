@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import {
   X,
@@ -23,6 +23,11 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import { OrderStatus, ServiceItem } from '../../types';
+import { canApproveQuote, remainingBalance } from '../../domain/orderRules';
+import { nowTimestamp } from '../../utils/dates';
+import { computeOrderTotals } from '../../domain/totals';
+import { openWhatsApp } from '../../utils/whatsapp';
+import { usePermissions } from '../../hooks/usePermissions';
 
 const STATUS_STEPS: { status: OrderStatus; label: string }[] = [
   { status: 'recebido', label: 'Recebido' },
@@ -50,9 +55,13 @@ export const OrderDetailSheet: React.FC = () => {
     addOrderPhoto,
     approveQuote,
     recordPayment,
+    deliverOrder,
+    orderSheetFocus,
+    setOrderSheetFocus,
     triggerHaptic,
     showToast,
   } = useApp();
+  const permissions = usePermissions();
 
   const [activeTab, setActiveTab] = useState<'servicos' | 'fotos' | 'orcamento' | 'historico'>('servicos');
   const [isAddingService, setIsAddingService] = useState(false);
@@ -63,6 +72,16 @@ export const OrderDetailSheet: React.FC = () => {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'pix' | 'cartao_credito' | 'dinheiro'>('pix');
+
+  // Entrega bloqueada por saldo (Home, lista ou bancada): abre direto no pagamento.
+  useEffect(() => {
+    if (orderSheetFocus !== 'pagamento') return;
+    setOrderSheetFocus(null);
+    const target = orders.find((o) => o.id === activeOrderId);
+    setActiveTab('orcamento');
+    setPaymentAmount(target ? remainingBalance(target).toFixed(2) : '');
+    setIsPaymentModalOpen(true);
+  }, [orderSheetFocus, setOrderSheetFocus, orders, activeOrderId]);
 
   if (!activeOrderId) return null;
 
@@ -100,13 +119,13 @@ export const OrderDetailSheet: React.FC = () => {
       ? 'Foto de entrada / avarias no balcão'
       : 'Foto registrada na bancada';
 
-    openCamera((url, caption) => {
+    openCamera((url, caption, chosenTag) => {
       addOrderPhoto(order.id, {
         url,
-        tag,
+        tag: chosenTag,
         caption: caption || defaultCaption,
       });
-    });
+    }, tag);
   };
 
   const handleStepClick = (targetStatus: OrderStatus) => {
@@ -116,17 +135,9 @@ export const OrderDetailSheet: React.FC = () => {
       return;
     }
 
-    // Atendente: Allowed to deliver when ready
+    // Atendente: entrega quando está pronto (com saldo, o pagamento vem antes)
     if (targetStatus === 'entregue' && order.status === 'pronto') {
-      advanceOrderStatus(order.id, 'entregue', 'Entregue ao cliente no balcão de recepção');
-      showToast({
-        title: 'Entrega Registrada!',
-        description: 'Instrumento entregue ao cliente com sucesso.',
-        type: 'success',
-      });
-      if (remainingBalance > 0) {
-        setIsPaymentModalOpen(true);
-      }
+      deliverOrder(order.id, 'Entregue ao cliente no balcão de recepção');
       return;
     }
 
@@ -139,17 +150,26 @@ export const OrderDetailSheet: React.FC = () => {
 
   const handleShareWhatsApp = () => {
     triggerHaptic();
-    const phoneClean = client?.phone.replace(/\D/g, '') || '';
-    const message = encodeURIComponent(
-      `Olá ${client?.name}! Aqui é da Oficina Luthier.\n\nAtualização sobre seu ${instrument?.brand} ${instrument?.model} (OS #${order.orderNumber}):\nStatus atual: *${order.status.toUpperCase().replace('_', ' ')}*.\n\nAcompanhe fotos e detalhes pelo link do portal:\nhttps://luthieria.app/os/${order.clientTrackingToken}\n\nQualquer dúvida, estamos à disposição na bancada!`
-    );
-    window.open(`https://wa.me/55${phoneClean}?text=${message}`, '_blank');
+    // Texto puro: openWhatsApp codifica uma única vez.
+    const message = `Olá ${client?.name}! Aqui é da Oficina Luthier.\n\nAtualização sobre seu ${instrument?.brand} ${instrument?.model} (OS #${order.orderNumber}):\nStatus atual: *${order.status.toUpperCase().replace('_', ' ')}*.\n\nAcompanhe fotos e detalhes pelo link do portal:\nhttps://luthieria.app/os/${order.clientTrackingToken}\n\nQualquer dúvida, estamos à disposição na bancada!`;
+    if (!openWhatsApp(client?.phone, message)) {
+      showToast({ title: 'Cliente sem telefone cadastrado', type: 'warning' });
+    }
   };
 
   const handleSavePayment = () => {
-    const val = parseFloat(paymentAmount);
+    const val = parseFloat(paymentAmount.replace(',', '.'));
     if (!val || val <= 0) {
       showToast({ title: 'Informe um valor válido', type: 'warning' });
+      return;
+    }
+    if (val > balanceDue) {
+      showToast({
+        title: 'Valor maior que o saldo',
+        description: `Saldo em aberto: R$ ${balanceDue.toFixed(2)}.`,
+        type: 'warning',
+      });
+      setPaymentAmount(balanceDue.toFixed(2));
       return;
     }
     recordPayment({
@@ -160,14 +180,15 @@ export const OrderDetailSheet: React.FC = () => {
       instrumentDescription: `${instrument?.brand} ${instrument?.model}`,
       amount: val,
       method: paymentMethod,
-      date: new Date().toISOString().replace('T', ' ').substring(0, 16),
+      date: nowTimestamp(),
       status: 'concluido',
     });
     setIsPaymentModalOpen(false);
     setPaymentAmount('');
   };
 
-  const remainingBalance = Math.max(0, order.totalAmount - (order.paidAmount || 0));
+  const balanceDue = remainingBalance(order);
+  const totals = computeOrderTotals(order.services, order.quote?.discount ?? 0);
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 backdrop-blur-sm animate-in fade-in">
@@ -491,36 +512,30 @@ export const OrderDetailSheet: React.FC = () => {
                 </div>
 
                 <div className="space-y-1.5 text-xs pt-1 border-t border-stone-800">
+                  {/* Composição de preço (mão de obra, peças, desconto) só para quem precifica.
+                      O balcão vê total, pago e saldo, que precisa para cobrar na entrega. */}
+                  {permissions.canViewFinancialTotals && (
+                  <>
                   <div className="flex justify-between text-stone-300">
                     <span>Mão de Obra ({order.services.length} serviços):</span>
-                    <span className="font-semibold">
-                      R$ {order.services.reduce((acc, s) => acc + s.laborPrice, 0).toFixed(2)}
-                    </span>
+                    <span className="font-semibold">R$ {totals.laborTotal.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-stone-300">
                     <span>Peças & Insumos Utilizados:</span>
-                    <span className="font-semibold">
-                      R${' '}
-                      {order.services
-                        .reduce(
-                          (acc, s) =>
-                            acc +
-                            s.partsUsed.reduce((pAcc, p) => pAcc + p.unitPrice * p.quantity, 0),
-                          0
-                        )
-                        .toFixed(2)}
-                    </span>
+                    <span className="font-semibold">R$ {totals.partsTotal.toFixed(2)}</span>
                   </div>
-                  {order.quote?.discount ? (
+                  {totals.discount > 0 ? (
                     <div className="flex justify-between text-emerald-400">
                       <span>Desconto Aplicado:</span>
-                      <span>- R$ {order.quote.discount.toFixed(2)}</span>
+                      <span>- R$ {totals.discount.toFixed(2)}</span>
                     </div>
                   ) : null}
+                  </>
+                  )}
                   <div className="flex justify-between text-base font-bold text-white pt-2 border-t border-stone-800">
                     <span>Valor Total da OS:</span>
                     <span className="text-amber-400 font-mono">
-                      R$ {order.totalAmount.toFixed(2)}
+                      R$ {totals.grandTotal.toFixed(2)}
                     </span>
                   </div>
                   <div className="flex justify-between text-xs text-stone-400 pt-1">
@@ -532,7 +547,7 @@ export const OrderDetailSheet: React.FC = () => {
                   <div className="flex justify-between text-xs text-stone-400">
                     <span>Saldo Restante:</span>
                     <span className="text-rose-400 font-mono font-semibold">
-                      R$ {remainingBalance.toFixed(2)}
+                      R$ {balanceDue.toFixed(2)}
                     </span>
                   </div>
                 </div>
@@ -548,7 +563,7 @@ export const OrderDetailSheet: React.FC = () => {
                     Enviar Orçamento WhatsApp
                   </button>
 
-                  {order.quote?.status !== 'aprovado' && (
+                  {permissions.canApproveClientQuote && canApproveQuote(order) && (
                     <button
                       type="button"
                       onClick={() => approveQuote(order.id)}
@@ -570,7 +585,7 @@ export const OrderDetailSheet: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      setPaymentAmount(remainingBalance > 0 ? remainingBalance.toString() : '100');
+                      setPaymentAmount(balanceDue > 0 ? balanceDue.toFixed(2) : '');
                       setIsPaymentModalOpen(true);
                     }}
                     className="text-xs text-amber-400 font-semibold hover:text-amber-300 flex items-center gap-1"
@@ -695,15 +710,7 @@ export const OrderDetailSheet: React.FC = () => {
                 type="button"
                 onClick={() => {
                   triggerHaptic();
-                  advanceOrderStatus(order.id, 'entregue', 'Entregue ao cliente no balcão de recepção');
-                  showToast({
-                    title: 'Entrega Registrada!',
-                    description: 'Instrumento entregue ao cliente com sucesso.',
-                    type: 'success',
-                  });
-                  if (remainingBalance > 0) {
-                    setIsPaymentModalOpen(true);
-                  }
+                  deliverOrder(order.id, 'Entregue ao cliente no balcão de recepção');
                 }}
                 className="flex-1 py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/80 active:scale-95 transition-all"
               >

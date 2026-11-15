@@ -1,19 +1,11 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { useApp } from '../../context/AppContext';
 import { LoginPage } from './LoginPage';
 import { ForgotPasswordModal } from './ForgotPasswordModal';
 
+// O papel do AppContext vem do usuário logado (AppProvider remontado por usuário em App.tsx).
 export const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated, isLoading, user } = useAuth();
-  const { currentRole, setRole } = useApp();
-
-  // Keep AppContext role in sync with authenticated user role
-  useEffect(() => {
-    if (user && user.role !== currentRole) {
-      setRole(user.role);
-    }
-  }, [user, currentRole, setRole]);
+  const { isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) {
     return (

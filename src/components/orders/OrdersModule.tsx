@@ -15,6 +15,7 @@ import {
   Camera,
 } from 'lucide-react';
 import { OrderStatus } from '../../types';
+import { openWhatsApp } from '../../utils/whatsapp';
 
 export const OrdersModule: React.FC = () => {
   const {
@@ -24,8 +25,10 @@ export const OrdersModule: React.FC = () => {
     currentRole,
     setActiveOrderId,
     advanceOrderStatus,
+    deliverOrder,
     setIsNewOrderWizardOpen,
     triggerHaptic,
+    showToast,
   } = useApp();
 
   const [statusFilter, setStatusFilter] = useState<string>('todos');
@@ -267,8 +270,9 @@ export const OrdersModule: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => {
-                          const phoneClean = client?.phone.replace(/\D/g, '') || '';
-                          window.open(`https://wa.me/55${phoneClean}`, '_blank');
+                          if (!openWhatsApp(client?.phone)) {
+                            showToast({ title: 'Cliente sem telefone cadastrado', type: 'warning' });
+                          }
                         }}
                         className="p-1.5 rounded-lg bg-emerald-950 text-emerald-400 hover:bg-emerald-900 border border-emerald-800/60"
                         title="Abrir conversa WhatsApp"
@@ -292,7 +296,7 @@ export const OrdersModule: React.FC = () => {
                           type="button"
                           onClick={() => {
                             triggerHaptic();
-                            advanceOrderStatus(ord.id, 'entregue', 'Entregue no balcão de atendimento');
+                            deliverOrder(ord.id, 'Entregue no balcão de atendimento');
                           }}
                           className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-sm active:scale-95 transition-all"
                         >

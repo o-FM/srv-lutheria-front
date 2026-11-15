@@ -1,6 +1,6 @@
 import React from 'react';
 import { AppProvider, useApp } from './context/AppContext';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { AuthGuard } from './components/auth/AuthGuard';
 import { Header } from './components/common/Header';
 import { BottomTabBar } from './components/common/BottomTabBar';
@@ -20,9 +20,11 @@ import { ClientPortalView } from './components/client-portal/ClientPortalView';
 import { ReauthBottomSheet } from './components/auth/ReauthBottomSheet';
 import { AccountSettingsModal } from './components/auth/AccountSettingsModal';
 import { ForgotPasswordModal } from './components/auth/ForgotPasswordModal';
+import { getRolePermissions } from './utils/permissions';
 
 const MainLayout: React.FC = () => {
-  const { activeTab, setActiveTab, currentRole } = useApp();
+  const { activeTab, setActiveTab, currentRole, activeOrderId } = useApp();
+  const { user } = useAuth();
 
   // Redirect away from restricted tabs
   React.useEffect(() => {
@@ -55,7 +57,8 @@ const MainLayout: React.FC = () => {
       <BottomTabBar />
 
       {/* Global Modals & Sheets */}
-      <OrderDetailSheet />
+      {/* key: abrir outra OS recomeça na aba "Serviços", sem formulários de outra OS */}
+      <OrderDetailSheet key={activeOrderId ?? 'none'} />
       <NewOrderWizardModal />
       <WorkbenchModeModal />
       <CameraModal />
@@ -63,20 +66,47 @@ const MainLayout: React.FC = () => {
       <GlobalSearchModal />
       <ToastContainer />
       <ReauthBottomSheet />
-      <AccountSettingsModal />
+      {/* key: os campos da Conta sempre começam com os dados do usuário atual */}
+      <AccountSettingsModal key={user?.id ?? 'anon'} />
       <ForgotPasswordModal />
     </div>
+  );
+};
+
+// Remonta o contexto de dados a cada troca de usuário: o estado em memória de um
+// usuário (OS aberta, busca, modais, dados após logout) nunca passa para o próximo.
+const AppProviderKeyed: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, profileSwitchedTo } = useAuth();
+  const switchNotice =
+    profileSwitchedTo && profileSwitchedTo.id === user?.id
+      ? {
+          title: 'Perfil alterado com sucesso',
+          description: `Sessão ativa: ${profileSwitchedTo.name} (${getRolePermissions(profileSwitchedTo.role).roleLabel})`,
+          type: 'success' as const,
+        }
+      : null;
+
+  return (
+    <AppProvider
+      key={user?.id ?? 'anon'}
+      initialRole={user?.role ?? 'luthier'}
+      isPersistenceEnabled={!!user}
+      initialNotice={switchNotice}
+      currentUserName={user?.name ?? ''}
+    >
+      {children}
+    </AppProvider>
   );
 };
 
 export default function App() {
   return (
     <AuthProvider>
-      <AppProvider>
+      <AppProviderKeyed>
         <AuthGuard>
           <MainLayout />
         </AuthGuard>
-      </AppProvider>
+      </AppProviderKeyed>
     </AuthProvider>
   );
 }

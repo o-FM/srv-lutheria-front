@@ -16,12 +16,13 @@ import {
   LogOut,
 } from 'lucide-react';
 import { UserRole } from '../../types';
+import { usePermissions } from '../../hooks/usePermissions';
+import { useConfirmedReset } from '../../hooks/useConfirmedReset';
 
 export const Header: React.FC = () => {
   const { user, logout, requestReauthentication, setIsAccountSettingsOpen } = useAuth();
   const {
     currentRole,
-    setRole,
     syncStatus,
     toggleSyncStatus,
     offlineQueueCount,
@@ -29,8 +30,9 @@ export const Header: React.FC = () => {
     isDarkMode,
     toggleDarkMode,
     setIsWorkbenchModeOpen,
-    resetToDefaults,
   } = useApp();
+  const permissions = usePermissions();
+  const confirmAndReset = useConfirmedReset();
 
   const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
 
@@ -240,13 +242,13 @@ export const Header: React.FC = () => {
                       </button>
                     </div>
 
-                    {currentRole === 'luthier' && (
+                    {permissions.canResetDemoData && (
                       <div className="mt-1 pt-1 border-t border-stone-800/60 flex items-center justify-between px-1">
                         <button
                           type="button"
                           onClick={() => {
-                            resetToDefaults();
                             setIsRoleMenuOpen(false);
+                            void confirmAndReset();
                           }}
                           className="flex items-center gap-1.5 text-[11px] text-stone-400 hover:text-amber-400 transition-colors py-1"
                         >

@@ -15,6 +15,12 @@ import {
   ArrowLeft,
 } from 'lucide-react';
 import { OrderStatus } from '../../types';
+import { canApproveQuote } from '../../domain/orderRules';
+import { computeOrderTotals, servicePartsTotal } from '../../domain/totals';
+import { openWhatsApp } from '../../utils/whatsapp';
+
+// WhatsApp da oficina (sem o 55). Vai para src/config/workshop.ts na tarefa 2.x.
+const WORKSHOP_WHATSAPP = '11987654321';
 
 export const ClientPortalView: React.FC = () => {
   const { user, requestReauthentication } = useAuth();
@@ -24,18 +30,18 @@ export const ClientPortalView: React.FC = () => {
     clients,
     approveQuote,
     rejectQuote,
-    setRole,
     triggerHaptic,
     showToast,
   } = useApp();
 
-  // Strictly isolate orders to the logged-in client (e.g. Lucas Silveira)
-  const currentClient =
-    (user && clients.find((c) => c.email.toLowerCase() === user.email.toLowerCase())) ||
-    clients.find((c) => c.id === 'cli-1') ||
-    clients[0];
+  // Fechado por padrão: só mostra OS do cadastro com o mesmo e-mail do usuário logado.
+  // Sem correspondência, nenhuma OS aparece (nunca cai no cadastro de outra pessoa).
+  const userEmail = user?.email.trim().toLowerCase() ?? '';
+  const currentClient = userEmail
+    ? clients.find((c) => c.email.trim().toLowerCase() === userEmail)
+    : undefined;
 
-  const clientOrders = orders.filter((o) => o.clientId === currentClient.id);
+  const clientOrders = currentClient ? orders.filter((o) => o.clientId === currentClient.id) : [];
 
   const [selectedOrderId, setSelectedOrderId] = useState<string>(
     clientOrders[0]?.id || ''
@@ -48,6 +54,17 @@ export const ClientPortalView: React.FC = () => {
   const order = clientOrders.find((o) => o.id === activeOrderId) || clientOrders[0];
   const instrument = instruments.find((i) => i.id === order?.instrumentId);
   const client = currentClient;
+
+  if (!currentClient) {
+    return (
+      <div role="status" className="p-8 text-center text-stone-300 space-y-2">
+        <p className="font-semibold text-white">Conta ainda não vinculada</p>
+        <p className="text-sm">
+          Sua conta ainda não está vinculada a um cadastro de cliente. Fale com a oficina.
+        </p>
+      </div>
+    );
+  }
 
   if (!order) {
     return (
@@ -66,6 +83,7 @@ export const ClientPortalView: React.FC = () => {
   ];
 
   const currentStepIdx = steps.findIndex((s) => s.status === order.status);
+  const quoteTotals = computeOrderTotals(order.services, order.quote?.discount ?? 0);
 
   const handleApprove = () => {
     triggerHaptic();
@@ -74,10 +92,10 @@ export const ClientPortalView: React.FC = () => {
 
   const handleContactWhatsApp = () => {
     triggerHaptic();
-    const msg = encodeURIComponent(
+    openWhatsApp(
+      WORKSHOP_WHATSAPP,
       `Olá luthier! Sou ${client?.name}, sobre a OS #${order.orderNumber} do meu ${instrument?.brand} ${instrument?.model}. Poderiam tirar uma dúvida?`
     );
-    window.open(`https://wa.me/5511987654321?text=${msg}`, '_blank');
   };
 
   return (
@@ -219,7 +237,7 @@ export const ClientPortalView: React.FC = () => {
       </div>
 
       {/* Quote Approval Box (Huge Thumb Action if Waiting Approval) */}
-      {order.status === 'aguardando_aprovacao' && (
+      {canApproveQuote(order) && (
         <div className="p-5 rounded-3xl bg-gradient-to-br from-amber-950/80 via-stone-900 to-stone-950 border-2 border-amber-600 shadow-2xl space-y-4 animate-in fade-in">
           <div className="flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-amber-400" />
@@ -232,16 +250,25 @@ export const ClientPortalView: React.FC = () => {
           </p>
 
           <div className="p-3 rounded-2xl bg-stone-950 border border-stone-800 space-y-2 text-xs">
+            {/* Mão de obra + peças por serviço: a soma bate com o total (antes só mostrava a mão de obra) */}
             {order.services.map((s) => (
               <div key={s.id} className="flex justify-between text-stone-300">
                 <span className="truncate pr-2">• {s.title}</span>
-                <span className="font-semibold text-white">R$ {s.laborPrice.toFixed(2)}</span>
+                <span className="font-semibold text-white">
+                  R$ {(s.laborPrice + servicePartsTotal(s)).toFixed(2)}
+                </span>
               </div>
             ))}
+            {quoteTotals.discount > 0 && (
+              <div className="flex justify-between text-emerald-400">
+                <span>Desconto:</span>
+                <span>- R$ {quoteTotals.discount.toFixed(2)}</span>
+              </div>
+            )}
             <div className="pt-2 border-t border-stone-800 flex justify-between font-black text-sm text-white">
               <span>Total Orçado:</span>
               <span className="text-amber-400 font-mono">
-                R$ {order.totalAmount.toFixed(2)}
+                R$ {quoteTotals.grandTotal.toFixed(2)}
               </span>
             </div>
           </div>

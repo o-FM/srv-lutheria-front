@@ -53,6 +53,13 @@ export function isValidEmail(email: string): boolean {
   return emailRegex.test(email.trim());
 }
 
+/** Busca por CPF comparando só os dígitos (a máscara da busca não importa). */
+export function matchesCpfQuery(cpf: string | undefined, query: string): boolean {
+  const queryDigits = cleanCpf(query);
+  if (!cpf || !queryDigits) return false;
+  return cleanCpf(cpf).includes(queryDigits);
+}
+
 /**
  * Masks CPF according to LGPD rules: ***.456.789-**
  */

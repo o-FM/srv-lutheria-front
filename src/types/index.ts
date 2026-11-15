@@ -28,6 +28,11 @@ export interface Photo {
   timestamp: string;
 }
 
+export type PhotoTag = Photo['tag'];
+
+/** Retorno da câmera: imagem, legenda e a categoria escolhida pelo usuário. */
+export type CameraCallback = (photoUrl: string, caption: string, tag: PhotoTag) => void;
+
 export interface Client {
   id: string;
   name: string;
@@ -125,6 +130,8 @@ export interface Order {
   totalAmount: number;
   paidAmount: number;
   clientTrackingToken: string;
+  /** Peças já baixadas do estoque. Ausente em OS antigas (ver isPartsDeducted). */
+  partsDeducted?: boolean;
 }
 
 export type StockCategory = 'pecas' | 'cordas' | 'madeiras' | 'insumos';

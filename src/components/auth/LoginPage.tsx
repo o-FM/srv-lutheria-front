@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
-import { formatCpf, isValidCpf, isValidEmail, cleanCpf } from '../../utils/cpfValidator';
+import { isValidCpf, isValidEmail, cleanCpf } from '../../utils/cpfValidator';
+import { formatIdentifierInput, isEmailIdentifier } from '../../utils/identifier';
 import {
   Eye,
   EyeOff,
@@ -17,7 +18,7 @@ import {
 
 export const LoginPage: React.FC = () => {
   const { login, setIsForgotPasswordOpen } = useAuth();
-  const { setRole, triggerHaptic, syncStatus } = useApp();
+  const { triggerHaptic, syncStatus } = useApp();
 
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -52,24 +53,11 @@ export const LoginPage: React.FC = () => {
     return () => clearInterval(timer);
   }, [lockedInfo]);
 
-  // Handle single field input: email or CPF with live mask
+  // Campo único: e-mail ou CPF (máscara só quando há apenas dígitos)
   const handleIdentifierChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
     setFieldError(null);
     setGeneralError(null);
-
-    if (val.includes('@')) {
-      // Treat as email
-      setIdentifier(val.trim());
-    } else {
-      // Numbers only -> CPF formatting
-      const digits = cleanCpf(val);
-      if (digits.length > 0) {
-        setIdentifier(formatCpf(digits));
-      } else {
-        setIdentifier(val);
-      }
-    }
+    setIdentifier(formatIdentifierInput(e.target.value));
   };
 
   // Validate on blur
@@ -94,7 +82,7 @@ export const LoginPage: React.FC = () => {
     }
   };
 
-  const isEmailMode = identifier.includes('@');
+  const isEmailMode = isEmailIdentifier(identifier);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -123,9 +111,7 @@ export const LoginPage: React.FC = () => {
     setGeneralError(null);
 
     try {
-      const loggedUser = await login(identifier, password, rememberMe);
-      // Sync AppContext's currentRole with the logged user role
-      setRole(loggedUser.role);
+      await login(identifier, password, rememberMe);
     } catch (err: any) {
       triggerHaptic();
       if (err.locked) {
@@ -224,10 +210,12 @@ export const LoginPage: React.FC = () => {
                 ref={inputRef}
                 id="auth-identifier"
                 name="username"
-                type={isEmailMode ? 'email' : 'text'}
-                inputMode={isEmailMode ? 'email' : 'numeric'}
+                type="text"
+                inputMode="email"
                 autoComplete="username"
                 autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 value={identifier}
                 onChange={handleIdentifierChange}
                 onBlur={handleIdentifierBlur}
@@ -334,7 +322,8 @@ export const LoginPage: React.FC = () => {
           </div>
         </form>
 
-        {/* Demo Accounts Quick-Select Card */}
+        {/* Demo Accounts Quick-Select Card: só em desenvolvimento (senhas não vão para o bundle de produção) */}
+        {import.meta.env.DEV && (
         <div className="pt-3 border-t border-stone-800/80 space-y-2">
           <p className="text-[11px] font-bold text-stone-400 uppercase tracking-wider text-center">
             Contas de Teste Rápidas (1 toque):
@@ -369,6 +358,7 @@ export const LoginPage: React.FC = () => {
             Ou teste usando CPF com máscara: <span className="font-mono text-stone-400">123.456.789-09</span>
           </p>
         </div>
+        )}
       </div>
 
       {/* Footer Info & LGPD notice */}

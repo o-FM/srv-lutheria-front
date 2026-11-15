@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { authApi } from '../../services/authApi';
-import { formatCpf, isValidCpf, isValidEmail, cleanCpf } from '../../utils/cpfValidator';
+import { formatIdentifierInput } from '../../utils/identifier';
 import {
   Lock,
   X,
@@ -23,7 +23,7 @@ export const ReauthBottomSheet: React.FC = () => {
     confirmReauthSuccess,
     switchProfileWithTicket,
   } = useAuth();
-  const { setRole, triggerHaptic, showToast, syncStatus } = useApp();
+  const { triggerHaptic, syncStatus } = useApp();
 
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -38,8 +38,8 @@ export const ReauthBottomSheet: React.FC = () => {
     if (reauthModal.isOpen) {
       if (reauthModal.actionType === 'SENSITIVE_UPDATE' && user) {
         setIdentifier(user.email);
-      } else if (reauthModal.targetRole) {
-        // Pre-fill target role hint if switching
+      } else if (reauthModal.targetRole && import.meta.env.DEV) {
+        // Só em desenvolvimento: preenche o e-mail da persona demo de destino
         const targetEmails = {
           luthier: 'armando.luthier@oficina.com',
           atendente: 'mariana.balcao@oficina.com',
@@ -59,21 +59,9 @@ export const ReauthBottomSheet: React.FC = () => {
   if (!reauthModal.isOpen) return null;
 
   const handleIdentifierChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
     setErrorMsg(null);
-    if (val.includes('@')) {
-      setIdentifier(val.trim());
-    } else {
-      const digits = cleanCpf(val);
-      if (digits.length > 0) {
-        setIdentifier(formatCpf(digits));
-      } else {
-        setIdentifier(val);
-      }
-    }
+    setIdentifier(formatIdentifierInput(e.target.value));
   };
-
-  const isEmailMode = identifier.includes('@');
 
   const handleConfirm = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -115,14 +103,8 @@ export const ReauthBottomSheet: React.FC = () => {
       triggerHaptic();
 
       if (reauthModal.actionType === 'SWITCH_PROFILE') {
-        // Switch profile on server, invalidate old session, clear memory/cache
-        const newUser = await switchProfileWithTicket(res.ticket);
-        setRole(newUser.role);
-        showToast({
-          title: 'Perfil Alterado com Sucesso',
-          description: `Sessão ativa: ${newUser.name} (${newUser.role.toUpperCase()})`,
-          type: 'success',
-        });
+        // Troca no servidor; o AppProvider remonta para o novo usuário e mostra o aviso.
+        await switchProfileWithTicket(res.ticket);
       }
 
       confirmReauthSuccess(res.ticket);
@@ -135,7 +117,7 @@ export const ReauthBottomSheet: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in select-none">
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in select-none">
       <div
         className="fixed inset-0"
         onClick={closeReauthModal}
@@ -200,9 +182,12 @@ export const ReauthBottomSheet: React.FC = () => {
               <input
                 ref={inputRef}
                 id="reauth-identifier"
-                type={isEmailMode ? 'email' : 'text'}
-                inputMode={isEmailMode ? 'email' : 'numeric'}
+                type="text"
+                inputMode="email"
                 autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 value={identifier}
                 onChange={handleIdentifierChange}
                 placeholder="nome@email.com ou 000.000.000-00"
@@ -241,13 +226,15 @@ export const ReauthBottomSheet: React.FC = () => {
               </div>
             </div>
 
-            {/* Hint for demo passwords */}
-            <div className="p-2.5 rounded-xl bg-stone-950/60 border border-stone-800/80 text-[11px] text-stone-400">
-              <span className="font-semibold text-stone-300">Senhas de teste: </span>
-              Luthier: <code className="text-amber-400 font-mono">Luthier@2026</code> ·
-              Balcão: <code className="text-amber-400 font-mono">Balcao@2026</code> ·
-              Cliente: <code className="text-amber-400 font-mono">Cliente@2026</code>
-            </div>
+            {/* Senhas demo: só em desenvolvimento */}
+            {import.meta.env.DEV && (
+              <div className="p-2.5 rounded-xl bg-stone-950/60 border border-stone-800/80 text-[11px] text-stone-400">
+                <span className="font-semibold text-stone-300">Senhas de teste: </span>
+                Luthier: <code className="text-amber-400 font-mono">Luthier@2026</code> ·
+                Balcão: <code className="text-amber-400 font-mono">Balcao@2026</code> ·
+                Cliente: <code className="text-amber-400 font-mono">Cliente@2026</code>
+              </div>
+            )}
 
             {/* Actions */}
             <div className="pt-2 flex items-center gap-2">

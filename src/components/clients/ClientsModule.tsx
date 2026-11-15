@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { formatCpf, isValidCpf, maskCpf, matchesCpfQuery } from '../../utils/cpfValidator';
+import { openWhatsApp } from '../../utils/whatsapp';
 import {
   Users,
   Search,
@@ -29,10 +31,12 @@ export const ClientsModule: React.FC = () => {
     setIsNewOrderWizardOpen,
     triggerHaptic,
     showToast,
+    // A ficha aberta vem do contexto: a busca global consegue abrir um cliente.
+    activeClientId: selectedClientId,
+    setActiveClientId: setSelectedClientId,
   } = useApp();
 
   const [search, setSearch] = useState('');
-  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
 
   // New Client Form
   const [isNewClientOpen, setIsNewClientOpen] = useState(false);
@@ -58,7 +62,7 @@ export const ClientsModule: React.FC = () => {
     return (
       c.name.toLowerCase().includes(q) ||
       c.phone.includes(q) ||
-      (c.cpf && c.cpf.includes(q))
+      matchesCpfQuery(c.cpf, q)
     );
   });
 
@@ -75,13 +79,7 @@ export const ClientsModule: React.FC = () => {
   };
 
   const handleCpfFormat = (val: string) => {
-    const digits = val.replace(/\D/g, '').slice(0, 11);
-    let formatted = digits;
-    if (digits.length > 3) formatted = `${digits.slice(0, 3)}.${digits.slice(3)}`;
-    if (digits.length > 6) formatted = `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
-    if (digits.length > 9)
-      formatted = `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
-    setCpf(formatted);
+    setCpf(formatCpf(val));
   };
 
   const handleCreateClient = (e: React.FormEvent) => {
@@ -90,11 +88,19 @@ export const ClientsModule: React.FC = () => {
       showToast({ title: 'Informe o nome do cliente', type: 'warning' });
       return;
     }
+    if (cpf.trim() && !isValidCpf(cpf)) {
+      showToast({
+        title: 'CPF inválido',
+        description: 'Confira os dígitos ou deixe o campo em branco.',
+        type: 'error',
+      });
+      return;
+    }
     triggerHaptic();
     const created = createClient({
       name: name.trim(),
-      phone: phone.trim() || '(11) 99999-9999',
-      email: email.trim() || `${name.toLowerCase().replace(/\s+/g, '')}@gmail.com`,
+      phone: phone.trim(),
+      email: email.trim(),
       cpf: cpf.trim(),
       address: address.trim(),
       notes: notes.trim(),
@@ -211,8 +217,9 @@ export const ClientsModule: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => {
-                        const clean = client.phone.replace(/\D/g, '');
-                        window.open(`https://wa.me/55${clean}`, '_blank');
+                        if (!openWhatsApp(client.phone)) {
+                          showToast({ title: 'Cliente sem telefone cadastrado', type: 'warning' });
+                        }
                       }}
                       className="p-2 rounded-xl bg-emerald-950 text-emerald-400 hover:bg-emerald-900 border border-emerald-800/80 active:scale-95"
                       title="WhatsApp com 1 toque"
@@ -263,8 +270,9 @@ export const ClientsModule: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    const clean = selectedClient.phone.replace(/\D/g, '');
-                    window.open(`https://wa.me/55${clean}`, '_blank');
+                    if (!openWhatsApp(selectedClient.phone)) {
+                      showToast({ title: 'Cliente sem telefone cadastrado', type: 'warning' });
+                    }
                   }}
                   className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-950 text-emerald-300 border border-emerald-800 text-xs font-semibold"
                 >
@@ -305,7 +313,7 @@ export const ClientsModule: React.FC = () => {
                     <p className="text-xs text-stone-400">{selectedClient.email}</p>
                     {selectedClient.cpf && (
                       <p className="text-[11px] text-stone-500 font-mono mt-0.5">
-                        CPF: {selectedClient.cpf}
+                        CPF: {maskCpf(selectedClient.cpf)}
                       </p>
                     )}
                   </div>

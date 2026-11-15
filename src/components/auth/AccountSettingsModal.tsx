@@ -15,6 +15,8 @@ import {
   FileText,
 } from 'lucide-react';
 
+const MIN_PASSWORD_LENGTH = 8;
+
 export const AccountSettingsModal: React.FC = () => {
   const {
     user,
@@ -50,6 +52,15 @@ export const AccountSettingsModal: React.FC = () => {
       setStatusMsg({
         type: 'error',
         text: 'Sem conexão com a internet. Alteração de dados sensíveis requer conexão.',
+      });
+      return;
+    }
+
+    // Mesmo limite do servidor: avisa antes de pedir a senha de reautenticação.
+    if (newPassword.trim() && newPassword.length < MIN_PASSWORD_LENGTH) {
+      setStatusMsg({
+        type: 'error',
+        text: `A nova senha precisa ter pelo menos ${MIN_PASSWORD_LENGTH} caracteres.`,
       });
       return;
     }
@@ -159,7 +170,7 @@ export const AccountSettingsModal: React.FC = () => {
             </div>
           )}
 
-          {!showLogs ? (
+          {!showLogs || user.role !== 'luthier' ? (
             <form onSubmit={handleSave} className="space-y-3.5">
               <p className="text-xs text-stone-400">
                 Qualquer alteração em e-mail, telefone ou senha exigirá <strong>reautenticação obrigatória</strong> com identificação e senha atual.
@@ -204,7 +215,7 @@ export const AccountSettingsModal: React.FC = () => {
                     type="password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Mínimo de 6 caracteres"
+                    placeholder="Mínimo de 8 caracteres"
                     className="w-full pl-3.5 pr-10 py-2.5 bg-stone-950 border border-stone-800 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500"
                   />
                   <Key className="w-4 h-4 text-stone-500 absolute right-3 top-1/2 -translate-y-1/2" />

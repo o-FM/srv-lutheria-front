@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { usePermissions } from '../../hooks/usePermissions';
+import { openWhatsApp } from '../../utils/whatsapp';
+import { useConfirmedReset } from '../../hooks/useConfirmedReset';
 import {
   Calendar,
   DollarSign,
@@ -24,20 +27,21 @@ export const MoreModule: React.FC = () => {
     instruments,
     currentRole,
     setActiveOrderId,
-    resetToDefaults,
     triggerHaptic,
     showToast,
   } = useApp();
+  const permissions = usePermissions();
+  const confirmAndReset = useConfirmedReset();
 
   const [subSection, setSubSection] = useState<'agenda' | 'financeiro' | 'mensagens' | 'config'>(
     'agenda'
   );
 
-  // If Atendente tries to access financial or config tabs, redirect to agenda
-  const activeSubSection =
-    currentRole === 'atendente' && (subSection === 'financeiro' || subSection === 'config')
-      ? 'agenda'
-      : subSection;
+  // Seções restritas caem na agenda quando o papel não tem acesso
+  const isSubSectionAllowed =
+    (subSection !== 'financeiro' || permissions.canAccessFinancials) &&
+    (subSection !== 'config' || permissions.canAccessConfig);
+  const activeSubSection = isSubSectionAllowed ? subSection : 'agenda';
 
   // Agenda Filter
   const [agendaFilter, setAgendaFilter] = useState<'hoje' | 'semana' | 'todos'>('semana');
@@ -60,7 +64,9 @@ export const MoreModule: React.FC = () => {
       case 'entrada':
         return `Olá ${name}! Seu instrumento (${instName}) deu entrada na Oficina Luthier com a OS #${activeOrder.orderNumber}. Você pode acompanhar o andamento e fotos pelo link:\nhttps://luthieria.app/os/${token}`;
       case 'orcamento':
-        return `Olá ${name}! O orçamento técnico da OS #${activeOrder.orderNumber} (${instName}) está pronto para sua aprovação. Total: R$ ${activeOrder.totalAmount.toFixed(2)}. Acesse para aprovar em 1 toque:\nhttps://luthieria.app/os/${token}`;
+        return `Olá ${name}! O orçamento técnico da OS #${activeOrder.orderNumber} (${instName}) está pronto para sua aprovação.${
+          permissions.canViewFinancialTotals ? ` Total: R$ ${activeOrder.totalAmount.toFixed(2)}.` : ''
+        } Acesse para aprovar em 1 toque:\nhttps://luthieria.app/os/${token}`;
       case 'pronto':
         return `Boas notícias, ${name}! Seu ${instName} (OS #${activeOrder.orderNumber}) está pronto, regulado e higienizado para retirada na bancada! Aguardamos sua visita.`;
     }
@@ -68,8 +74,9 @@ export const MoreModule: React.FC = () => {
 
   const handleSendWhatsApp = (text: string) => {
     triggerHaptic();
-    const phoneClean = orderClient?.phone.replace(/\D/g, '') || '';
-    window.open(`https://wa.me/55${phoneClean}?text=${encodeURIComponent(text)}`, '_blank');
+    if (!openWhatsApp(orderClient?.phone, text)) {
+      showToast({ title: 'Cliente sem telefone cadastrado', type: 'warning' });
+    }
   };
 
   const handleCopyText = (text: string) => {
@@ -84,11 +91,11 @@ export const MoreModule: React.FC = () => {
 
   const navItems = [
     { id: 'agenda' as const, label: 'Agenda', icon: Calendar },
-    ...(currentRole === 'luthier'
+    ...(permissions.canAccessFinancials
       ? [{ id: 'financeiro' as const, label: 'Financeiro', icon: DollarSign }]
       : []),
     { id: 'mensagens' as const, label: 'Mensagens', icon: MessageCircle },
-    ...(currentRole === 'luthier'
+    ...(permissions.canAccessConfig
       ? [{ id: 'config' as const, label: 'Config', icon: Settings }]
       : []),
   ];
@@ -224,7 +231,7 @@ export const MoreModule: React.FC = () => {
       )}
 
       {/* 2. FINANCEIRO MODULE (Exclusive for Luthier/Dono) */}
-      {currentRole === 'luthier' && activeSubSection === 'financeiro' && (
+      {activeSubSection === 'financeiro' && (
         <div className="space-y-4 animate-in fade-in">
           {/* Revenue Card */}
           <div className="p-4 rounded-3xl bg-stone-900 border border-stone-800 shadow-xl space-y-3">
@@ -375,7 +382,7 @@ export const MoreModule: React.FC = () => {
       )}
 
       {/* 4. CONFIGURAÇÕES MODULE */}
-      {subSection === 'config' && (
+      {activeSubSection === 'config' && (
         <div className="space-y-4 animate-in fade-in">
           <div className="p-4 rounded-3xl bg-stone-900 border border-stone-800 space-y-3">
             <h3 className="font-bold text-sm text-white">Dados da Oficina</h3>
@@ -400,14 +407,16 @@ export const MoreModule: React.FC = () => {
             <p className="text-xs text-stone-400">
               Caso queira reiniciar o banco de dados com os dados padrão originais:
             </p>
+            {permissions.canResetDemoData && (
             <button
               type="button"
-              onClick={resetToDefaults}
+              onClick={() => void confirmAndReset()}
               className="py-2.5 px-4 rounded-xl bg-stone-800 hover:bg-stone-700 text-amber-400 text-xs font-bold flex items-center gap-1.5"
             >
               <RotateCcw className="w-4 h-4" />
               Restaurar Dados Iniciais
             </button>
+            )}
           </div>
         </div>
       )}
