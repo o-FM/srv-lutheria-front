@@ -28,8 +28,6 @@ export const HomeModule: React.FC = () => {
     setActiveOrderId,
     setIsNewOrderWizardOpen,
     setIsWorkbenchModeOpen,
-    openCamera,
-    addOrderPhoto,
     advanceOrderStatus,
     deliverOrder,
     triggerHaptic,
@@ -46,20 +44,10 @@ export const HomeModule: React.FC = () => {
     .filter((o) => o.status === 'pronto' || o.status === 'entregue' || o.paidAmount > 0)
     .reduce((acc, o) => acc + (o.paidAmount || 0), 0);
 
+  // A foto vai para a OS escolhida na bancada (antes ia para a primeira OS ativa da lista).
   const handleQuickPhoto = () => {
     triggerHaptic();
-    const firstActive = activeOrders[0];
-    if (!firstActive) {
-      setIsNewOrderWizardOpen(true);
-      return;
-    }
-    openCamera((url, caption) => {
-      addOrderPhoto(firstActive.id, {
-        url,
-        tag: 'bancada',
-        caption: caption || 'Foto rápida da bancada',
-      });
-    });
+    setIsWorkbenchModeOpen(true);
   };
 
   return (
