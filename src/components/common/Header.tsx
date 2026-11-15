@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { UserRole } from '../../types';
 import { usePermissions } from '../../hooks/usePermissions';
+import { useConfirmedReset } from '../../hooks/useConfirmedReset';
 
 export const Header: React.FC = () => {
   const { user, logout, requestReauthentication, setIsAccountSettingsOpen } = useAuth();
@@ -29,9 +30,9 @@ export const Header: React.FC = () => {
     isDarkMode,
     toggleDarkMode,
     setIsWorkbenchModeOpen,
-    resetToDefaults,
   } = useApp();
   const permissions = usePermissions();
+  const confirmAndReset = useConfirmedReset();
 
   const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
 
@@ -246,8 +247,8 @@ export const Header: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => {
-                            resetToDefaults();
                             setIsRoleMenuOpen(false);
+                            void confirmAndReset();
                           }}
                           className="flex items-center gap-1.5 text-[11px] text-stone-400 hover:text-amber-400 transition-colors py-1"
                         >

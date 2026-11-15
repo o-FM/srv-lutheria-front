@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { usePermissions } from '../../hooks/usePermissions';
 import { openWhatsApp } from '../../utils/whatsapp';
+import { useConfirmedReset } from '../../hooks/useConfirmedReset';
 import {
   Calendar,
   DollarSign,
@@ -26,11 +27,11 @@ export const MoreModule: React.FC = () => {
     instruments,
     currentRole,
     setActiveOrderId,
-    resetToDefaults,
     triggerHaptic,
     showToast,
   } = useApp();
   const permissions = usePermissions();
+  const confirmAndReset = useConfirmedReset();
 
   const [subSection, setSubSection] = useState<'agenda' | 'financeiro' | 'mensagens' | 'config'>(
     'agenda'
@@ -409,7 +410,7 @@ export const MoreModule: React.FC = () => {
             {permissions.canResetDemoData && (
             <button
               type="button"
-              onClick={resetToDefaults}
+              onClick={() => void confirmAndReset()}
               className="py-2.5 px-4 rounded-xl bg-stone-800 hover:bg-stone-700 text-amber-400 text-xs font-bold flex items-center gap-1.5"
             >
               <RotateCcw className="w-4 h-4" />
