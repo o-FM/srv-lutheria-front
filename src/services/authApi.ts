@@ -37,6 +37,22 @@ export interface AuditLogItem {
   details?: string;
 }
 
+/** Erro HTTP da API de auth; `status` distingue sessão rejeitada de falha de rede/servidor. */
+export class AuthApiError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'AuthApiError';
+    this.status = status;
+  }
+}
+
+/** Só 401/403 significam que o servidor recusou a sessão. Rede fora ou 5xx não. */
+export function isSessionRejected(err: unknown): boolean {
+  return err instanceof AuthApiError && (err.status === 401 || err.status === 403);
+}
+
 export const authApi = {
   async login(identifier: string, password: string, rememberMe: boolean): Promise<LoginResponse> {
     const res = await fetch('/api/auth/login', {
@@ -125,7 +141,7 @@ export const authApi = {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) {
-      throw new Error('Sessão expirada ou inválida.');
+      throw new AuthApiError('Sessão expirada ou inválida.', res.status);
     }
     const data = await res.json();
     return data.user;

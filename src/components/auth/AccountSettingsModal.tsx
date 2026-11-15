@@ -29,6 +29,8 @@ export const AccountSettingsModal: React.FC = () => {
   const { showToast, triggerHaptic, syncStatus } = useApp();
 
   const [email, setEmail] = useState(user?.email || '');
+  // O portal identifica o cliente pelo e-mail; só a oficina pode trocá-lo (o servidor também recusa).
+  const isEmailLocked = user?.role === 'cliente';
   const [phone, setPhone] = useState(user?.phone || '');
   const [newPassword, setNewPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -185,10 +187,17 @@ export const AccountSettingsModal: React.FC = () => {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-3.5 pr-10 py-2.5 bg-stone-950 border border-stone-800 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500"
+                    readOnly={isEmailLocked}
+                    aria-describedby={isEmailLocked ? 'email-locked-hint' : undefined}
+                    className="w-full pl-3.5 pr-10 py-2.5 bg-stone-950 border border-stone-800 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500 read-only:text-stone-400"
                   />
                   <Mail className="w-4 h-4 text-stone-500 absolute right-3 top-1/2 -translate-y-1/2" />
                 </div>
+                {isEmailLocked && (
+                  <p id="email-locked-hint" className="mt-1 text-[11px] text-stone-500">
+                    Para trocar o e-mail, fale com a oficina.
+                  </p>
+                )}
               </div>
 
               <div>

@@ -46,6 +46,7 @@ import {
   nextStatus,
   partsToDeduct,
   remainingBalance,
+  revertTransition,
 } from '../domain/orderRules';
 
 interface AppContextType {
@@ -342,6 +343,12 @@ export const AppProvider: React.FC<AppProviderProps> = ({
     stockRef.current = stock;
   }, [stock]);
 
+  // Toda escrita no estoque passa por aqui: o ref fica em dia na hora, não só depois do render.
+  const mutateStock = useCallback((fn: (prev: StockItem[]) => StockItem[]) => {
+    stockRef.current = fn(stockRef.current);
+    setStock(stockRef.current);
+  }, []);
+
   // Avisa e devolve false quando o papel atual não pode executar a ação.
   const denyUnless = useCallback(
     (allowed: boolean, action: string): boolean => {
@@ -379,8 +386,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({
       if (applied === 0 && delta !== 0) return;
 
       const updatedItem = { ...item, currentQuantity: newQty };
-      stockRef.current = stockRef.current.map((s) => (s.id === stockItemId ? updatedItem : s));
-      setStock((prev) => prev.map((s) => (s.id === stockItemId ? updatedItem : s)));
+      mutateStock((prev) => prev.map((s) => (s.id === stockItemId ? updatedItem : s)));
 
       const movement: StockMovement = {
         id: newId('mov'),
@@ -394,7 +400,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({
       };
       setStockMovements((prev) => [movement, ...prev]);
     },
-    [showToast]
+    [showToast, mutateStock]
   );
 
   // Ajuste manual de estoque (tela de Estoque): exige permissão.
@@ -406,16 +412,30 @@ export const AppProvider: React.FC<AppProviderProps> = ({
     [denyUnless, permissions.canManageInventory, applyStockDelta]
   );
 
-  // Leitura síncrona das OS para validar antes de alterar (sem efeitos dentro de setOrders).
+  // Leitura síncrona das OS para validar antes de alterar (sem efeitos dentro de updaters).
   const ordersRef = useRef(orders);
   useEffect(() => {
     ordersRef.current = orders;
   }, [orders]);
 
-  const commitOrder = useCallback((updated: Order) => {
-    ordersRef.current = ordersRef.current.map((o) => (o.id === updated.id ? updated : o));
-    setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
+  // Toda escrita nas OS passa por aqui: quem lê o ref logo depois (no mesmo handler) já vê a mudança.
+  const mutateOrders = useCallback((fn: (prev: Order[]) => Order[]) => {
+    ordersRef.current = fn(ordersRef.current);
+    setOrders(ordersRef.current);
   }, []);
+
+  /** Aplica uma mudança a uma OS a partir da versão mais recente dela. */
+  const mutateOrder = useCallback(
+    (orderId: string, fn: (order: Order) => Order) => {
+      mutateOrders((prev) => prev.map((o) => (o.id === orderId ? fn(o) : o)));
+    },
+    [mutateOrders]
+  );
+
+  const commitOrder = useCallback(
+    (updated: Order) => mutateOrder(updated.id, () => updated),
+    [mutateOrder]
+  );
 
   const deductParts = useCallback(
     (order: Order, reason: string) => {
@@ -502,7 +522,18 @@ export const AppProvider: React.FC<AppProviderProps> = ({
         : {
             undoLabel: 'Desfazer',
             undoAction: () => {
-              commitOrder(order);
+              const current = ordersRef.current.find((o) => o.id === orderId);
+              const reverted =
+                current && revertTransition(current, order, target, newTimelineEvent.id);
+              if (!reverted) {
+                showToast({
+                  title: 'Não foi possível desfazer',
+                  description: `A OS #${order.orderNumber} mudou de status depois disso.`,
+                  type: 'warning',
+                });
+                return;
+              }
+              commitOrder(reverted);
               showToast({
                 title: `OS #${order.orderNumber} restaurada`,
                 description: `Status voltou para ${order.status}`,
@@ -535,11 +566,12 @@ export const AppProvider: React.FC<AppProviderProps> = ({
     [advanceOrderStatus, denyUnless, permissions.canRegisterDelivery]
   );
 
-  const updateOrder = useCallback((orderId: string, updates: Partial<Order>) => {
-    setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, ...updates } : o))
-    );
-  }, []);
+  const updateOrder = useCallback(
+    (orderId: string, updates: Partial<Order>) => {
+      mutateOrder(orderId, (o) => ({ ...o, ...updates }));
+    },
+    [mutateOrder]
+  );
 
   const addServiceItem = useCallback(
     (orderId: string, serviceData: Omit<ServiceItem, 'id'>) => {
@@ -549,42 +581,31 @@ export const AppProvider: React.FC<AppProviderProps> = ({
         id: newId('srv'),
       };
 
-      setOrders((prev) =>
-        prev.map((order) => {
-          if (order.id !== orderId) return order;
-          const updatedServices = [...order.services, newService];
-          // totalAmount é sempre o total já com desconto (antes ignorava o desconto).
-          const totals = computeOrderTotals(updatedServices, order.quote?.discount ?? 0);
+      mutateOrder(orderId, (order) => {
+        const updatedServices = [...order.services, newService];
+        // totalAmount é sempre o total já com desconto (antes ignorava o desconto).
+        const totals = computeOrderTotals(updatedServices, order.quote?.discount ?? 0);
 
-          return {
-            ...order,
-            services: updatedServices,
-            totalAmount: totals.grandTotal,
-            quote: order.quote ? { ...order.quote, ...totals } : order.quote,
-          };
-        })
-      );
+        return {
+          ...order,
+          services: updatedServices,
+          totalAmount: totals.grandTotal,
+          quote: order.quote ? { ...order.quote, ...totals } : order.quote,
+        };
+      });
     },
-    [denyUnless, permissions.canModifyPricingAndParts]
+    [denyUnless, permissions.canModifyPricingAndParts, mutateOrder]
   );
 
   const toggleServiceDone = useCallback(
     (orderId: string, serviceId: string) => {
       triggerHaptic();
-      setOrders((prev) =>
-        prev.map((order) => {
-          if (order.id !== orderId) return order;
-          const updatedServices = order.services.map((s) =>
-            s.id === serviceId ? { ...s, done: !s.done } : s
-          );
-          return {
-            ...order,
-            services: updatedServices,
-          };
-        })
-      );
+      mutateOrder(orderId, (order) => ({
+        ...order,
+        services: order.services.map((s) => (s.id === serviceId ? { ...s, done: !s.done } : s)),
+      }));
     },
-    [triggerHaptic]
+    [triggerHaptic, mutateOrder]
   );
 
   const addOrderPhoto = useCallback(
@@ -595,26 +616,21 @@ export const AppProvider: React.FC<AppProviderProps> = ({
         timestamp: nowTimestamp(),
       };
 
-      setOrders((prev) =>
-        prev.map((order) => {
-          if (order.id !== orderId) return order;
-          return {
-            ...order,
-            photos: [newPhoto, ...order.photos],
-            timeline: [
-              {
-                id: newId('tl'),
-                timestamp: newPhoto.timestamp,
-                type: 'photo_added',
-                title: `Nova foto adicionada: ${newPhoto.tag}`,
-                description: newPhoto.caption,
-                user: actor,
-              },
-              ...order.timeline,
-            ],
-          };
-        })
-      );
+      mutateOrder(orderId, (order) => ({
+        ...order,
+        photos: [newPhoto, ...order.photos],
+        timeline: [
+          {
+            id: newId('tl'),
+            timestamp: newPhoto.timestamp,
+            type: 'photo_added',
+            title: `Nova foto adicionada: ${newPhoto.tag}`,
+            description: newPhoto.caption,
+            user: actor,
+          },
+          ...order.timeline,
+        ],
+      }));
 
       showToast({
         title: 'Foto registrada com sucesso',
@@ -622,7 +638,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({
         type: 'success',
       });
     },
-    [currentRole, showToast]
+    [currentRole, showToast, mutateOrder]
   );
 
   const approveQuote = useCallback(
@@ -699,34 +715,31 @@ export const AppProvider: React.FC<AppProviderProps> = ({
   const rejectQuote = useCallback(
     (orderId: string, reason: string) => {
       triggerHaptic();
-      setOrders((prev) =>
-        prev.map((order) => {
-          if (order.id !== orderId) return order;
-          const timestamp = nowTimestamp();
-          return {
-            ...order,
-            quote: order.quote
-              ? {
-                  ...order.quote,
-                  status: 'rejeitado',
-                  answeredAt: timestamp,
-                  rejectionReason: reason,
-                }
-              : undefined,
-            timeline: [
-              {
-                id: newId('tl'),
-                timestamp,
-                type: 'quote_rejected',
-                title: 'Orçamento Recusado',
-                description: `Motivo: ${reason}`,
-                user: currentRole === 'cliente' ? `${actor} pelo portal` : actor,
-              },
-              ...order.timeline,
-            ],
-          };
-        })
-      );
+      mutateOrder(orderId, (order) => {
+        const timestamp = nowTimestamp();
+        return {
+          ...order,
+          quote: order.quote
+            ? {
+                ...order.quote,
+                status: 'rejeitado',
+                answeredAt: timestamp,
+                rejectionReason: reason,
+              }
+            : undefined,
+          timeline: [
+            {
+              id: newId('tl'),
+              timestamp,
+              type: 'quote_rejected',
+              title: 'Orçamento Recusado',
+              description: `Motivo: ${reason}`,
+              user: currentRole === 'cliente' ? `${actor} pelo portal` : actor,
+            },
+            ...order.timeline,
+          ],
+        };
+      });
 
       showToast({
         title: 'Recusa registrada',
@@ -734,13 +747,13 @@ export const AppProvider: React.FC<AppProviderProps> = ({
         type: 'warning',
       });
     },
-    [triggerHaptic, currentRole, showToast]
+    [triggerHaptic, currentRole, showToast, mutateOrder]
   );
 
   const createOrder = useCallback(
     (orderData: Partial<Order>, clientId: string, instrumentId: string) => {
       triggerHaptic();
-      const nextNumber = Math.max(...orders.map((o) => o.orderNumber), 1040) + 1;
+      const nextNumber = Math.max(...ordersRef.current.map((o) => o.orderNumber), 1040) + 1;
       const client = clients.find((c) => c.id === clientId);
       const tokenInitials = client ? client.name.split(' ').map((n) => n[0]).join('').slice(0, 2) : 'OS';
       const clientTrackingToken = `${tokenInitials}-${nextNumber}-${Math.floor(10 + Math.random() * 90)}`;
@@ -787,7 +800,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({
         clientTrackingToken,
       };
 
-      setOrders((prev) => [newOrder, ...prev]);
+      mutateOrders((prev) => [newOrder, ...prev]);
 
       if (syncStatus === 'offline') {
         setOfflineQueueCount((c) => c + 1);
@@ -801,7 +814,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({
 
       return newOrder;
     },
-    [orders, clients, currentRole, syncStatus, triggerHaptic, showToast]
+    [clients, currentRole, syncStatus, triggerHaptic, showToast, mutateOrders]
   );
 
   const createClient = useCallback(
@@ -858,27 +871,21 @@ export const AppProvider: React.FC<AppProviderProps> = ({
       setPayments((prev) => [newPayment, ...prev]);
 
       // update order's paidAmount
-      setOrders((prev) =>
-        prev.map((order) => {
-          if (order.id !== paymentData.orderId) return order;
-          const updatedPaid = (order.paidAmount || 0) + paymentData.amount;
-          return {
-            ...order,
-            paidAmount: updatedPaid,
-            timeline: [
-              {
-                id: newId('tl'),
-                timestamp: paymentData.date,
-                type: 'payment_received',
-                title: `Pagamento recebido: R$ ${paymentData.amount.toFixed(2)} (${paymentData.method.toUpperCase()})`,
-                description: `Recibo gerado: ${receiptNumber}`,
-                user: actor,
-              },
-              ...order.timeline,
-            ],
-          };
-        })
-      );
+      mutateOrder(paymentData.orderId, (order) => ({
+        ...order,
+        paidAmount: (order.paidAmount || 0) + paymentData.amount,
+        timeline: [
+          {
+            id: newId('tl'),
+            timestamp: paymentData.date,
+            type: 'payment_received',
+            title: `Pagamento recebido: R$ ${paymentData.amount.toFixed(2)} (${paymentData.method.toUpperCase()})`,
+            description: `Recibo gerado: ${receiptNumber}`,
+            user: actor,
+          },
+          ...order.timeline,
+        ],
+      }));
 
       try {
         confetti({
@@ -898,7 +905,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({
 
       return newPayment;
     },
-    [payments.length, currentRole, triggerHaptic, showToast, permissions.canRegisterDelivery]
+    [payments.length, currentRole, triggerHaptic, showToast, permissions.canRegisterDelivery, mutateOrder]
   );
 
   const openCamera = useCallback((callback: CameraCallback, defaultTag: PhotoTag = 'bancada') => {
@@ -927,15 +934,15 @@ export const AppProvider: React.FC<AppProviderProps> = ({
     removeKeys(BUSINESS_DATA_KEYS);
     setClients(INITIAL_CLIENTS);
     setInstruments(INITIAL_INSTRUMENTS);
-    setOrders(INITIAL_ORDERS);
-    setStock(INITIAL_STOCK);
+    mutateOrders(() => INITIAL_ORDERS);
+    mutateStock(() => INITIAL_STOCK);
     setPayments(INITIAL_PAYMENTS);
     setStockMovements(INITIAL_MOVEMENTS);
     showToast({
       title: 'Dados restaurados para o padrão de demonstração!',
       type: 'info',
     });
-  }, [showToast, denyUnless, permissions.canResetDemoData]);
+  }, [showToast, denyUnless, permissions.canResetDemoData, mutateOrders, mutateStock]);
 
   return (
     <AppContext.Provider

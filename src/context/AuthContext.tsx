@@ -6,7 +6,7 @@ import React, {
   useCallback,
   ReactNode,
 } from 'react';
-import { AuthUser, authApi } from '../services/authApi';
+import { AuthUser, authApi, isSessionRejected } from '../services/authApi';
 import { UserRole } from '../types';
 import {
   BUSINESS_DATA_KEYS,
@@ -133,15 +133,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setUser(remoteUser);
           setIsLoading(false);
         }
-      } catch {
-        // Token expired or invalid
-        if (isMounted) {
+      } catch (err: unknown) {
+        if (!isMounted) return;
+        if (isSessionRejected(err)) {
+          // O servidor recusou o token: encerra a sessão e apaga os dados do aparelho.
           clearStoredSession();
           clearBusinessData();
           setToken(null);
           setUser(null);
-          setIsLoading(false);
         }
+        // Rede fora ou erro do servidor: mantém sessão e dados (usuário salvo na storage).
+        setIsLoading(false);
       }
     }
     checkSession();
