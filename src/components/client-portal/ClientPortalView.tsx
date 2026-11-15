@@ -29,13 +29,14 @@ export const ClientPortalView: React.FC = () => {
     showToast,
   } = useApp();
 
-  // Strictly isolate orders to the logged-in client (e.g. Lucas Silveira)
-  const currentClient =
-    (user && clients.find((c) => c.email.toLowerCase() === user.email.toLowerCase())) ||
-    clients.find((c) => c.id === 'cli-1') ||
-    clients[0];
+  // Fechado por padrão: só mostra OS do cadastro com o mesmo e-mail do usuário logado.
+  // Sem correspondência, nenhuma OS aparece (nunca cai no cadastro de outra pessoa).
+  const userEmail = user?.email.trim().toLowerCase() ?? '';
+  const currentClient = userEmail
+    ? clients.find((c) => c.email.trim().toLowerCase() === userEmail)
+    : undefined;
 
-  const clientOrders = orders.filter((o) => o.clientId === currentClient.id);
+  const clientOrders = currentClient ? orders.filter((o) => o.clientId === currentClient.id) : [];
 
   const [selectedOrderId, setSelectedOrderId] = useState<string>(
     clientOrders[0]?.id || ''
@@ -48,6 +49,17 @@ export const ClientPortalView: React.FC = () => {
   const order = clientOrders.find((o) => o.id === activeOrderId) || clientOrders[0];
   const instrument = instruments.find((i) => i.id === order?.instrumentId);
   const client = currentClient;
+
+  if (!currentClient) {
+    return (
+      <div role="status" className="p-8 text-center text-stone-300 space-y-2">
+        <p className="font-semibold text-white">Conta ainda não vinculada</p>
+        <p className="text-sm">
+          Sua conta ainda não está vinculada a um cadastro de cliente. Fale com a oficina.
+        </p>
+      </div>
+    );
+  }
 
   if (!order) {
     return (
