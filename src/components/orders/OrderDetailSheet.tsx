@@ -25,6 +25,7 @@ import {
 import { OrderStatus, ServiceItem } from '../../types';
 import { canApproveQuote, remainingBalance } from '../../domain/orderRules';
 import { nowTimestamp } from '../../utils/dates';
+import { computeOrderTotals } from '../../domain/totals';
 import { usePermissions } from '../../hooks/usePermissions';
 
 const STATUS_STEPS: { status: OrderStatus; label: string }[] = [
@@ -186,6 +187,7 @@ export const OrderDetailSheet: React.FC = () => {
   };
 
   const balanceDue = remainingBalance(order);
+  const totals = computeOrderTotals(order.services, order.quote?.discount ?? 0);
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 backdrop-blur-sm animate-in fade-in">
@@ -515,28 +517,16 @@ export const OrderDetailSheet: React.FC = () => {
                   <>
                   <div className="flex justify-between text-stone-300">
                     <span>Mão de Obra ({order.services.length} serviços):</span>
-                    <span className="font-semibold">
-                      R$ {order.services.reduce((acc, s) => acc + s.laborPrice, 0).toFixed(2)}
-                    </span>
+                    <span className="font-semibold">R$ {totals.laborTotal.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-stone-300">
                     <span>Peças & Insumos Utilizados:</span>
-                    <span className="font-semibold">
-                      R${' '}
-                      {order.services
-                        .reduce(
-                          (acc, s) =>
-                            acc +
-                            s.partsUsed.reduce((pAcc, p) => pAcc + p.unitPrice * p.quantity, 0),
-                          0
-                        )
-                        .toFixed(2)}
-                    </span>
+                    <span className="font-semibold">R$ {totals.partsTotal.toFixed(2)}</span>
                   </div>
-                  {order.quote?.discount ? (
+                  {totals.discount > 0 ? (
                     <div className="flex justify-between text-emerald-400">
                       <span>Desconto Aplicado:</span>
-                      <span>- R$ {order.quote.discount.toFixed(2)}</span>
+                      <span>- R$ {totals.discount.toFixed(2)}</span>
                     </div>
                   ) : null}
                   </>
@@ -544,7 +534,7 @@ export const OrderDetailSheet: React.FC = () => {
                   <div className="flex justify-between text-base font-bold text-white pt-2 border-t border-stone-800">
                     <span>Valor Total da OS:</span>
                     <span className="text-amber-400 font-mono">
-                      R$ {order.totalAmount.toFixed(2)}
+                      R$ {totals.grandTotal.toFixed(2)}
                     </span>
                   </div>
                   <div className="flex justify-between text-xs text-stone-400 pt-1">

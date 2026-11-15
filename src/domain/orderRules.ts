@@ -1,4 +1,5 @@
 import type { Order, OrderStatus, Quote } from '../types';
+import { computeOrderTotals } from './totals';
 
 export const DEFAULT_PAYMENT_TERMS = '50% entrada + 50% na entrega';
 
@@ -97,18 +98,10 @@ export function remainingBalance(order: Order): number {
 
 /** Orçamento pendente a partir dos serviços da OS (para OS antigas sem orçamento). */
 export function buildPendingQuote(order: Order): Quote {
-  const laborTotal = order.services.reduce((acc, s) => acc + s.laborPrice, 0);
-  const partsTotal = order.services.reduce(
-    (acc, s) => acc + s.partsUsed.reduce((sum, p) => sum + p.unitPrice * p.quantity, 0),
-    0
-  );
   return {
     id: `qt-${order.id}`,
     orderId: order.id,
-    laborTotal,
-    partsTotal,
-    discount: 0,
-    grandTotal: laborTotal + partsTotal,
+    ...computeOrderTotals(order.services),
     status: 'pendente',
     paymentTerms: DEFAULT_PAYMENT_TERMS,
   };

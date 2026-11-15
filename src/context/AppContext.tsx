@@ -35,9 +35,11 @@ import {
 } from '../utils/storage';
 import { newId } from '../utils/ids';
 import { addDays, nowTimestamp, todayDate } from '../utils/dates';
+import { computeOrderTotals } from '../domain/totals';
 import { getRolePermissions } from '../utils/permissions';
 import {
   buildPendingQuote,
+  DEFAULT_PAYMENT_TERMS,
   canApproveQuote,
   canTransition,
   isPartsDeducted,
@@ -553,25 +555,14 @@ export const AppProvider: React.FC<AppProviderProps> = ({
         prev.map((order) => {
           if (order.id !== orderId) return order;
           const updatedServices = [...order.services, newService];
-          const laborTotal = updatedServices.reduce((acc, s) => acc + s.laborPrice, 0);
-          const partsTotal = updatedServices.reduce(
-            (acc, s) => acc + s.partsUsed.reduce((pAcc, p) => pAcc + p.unitPrice * p.quantity, 0),
-            0
-          );
-          const grandTotal = laborTotal + partsTotal;
+          // totalAmount é sempre o total já com desconto (antes ignorava o desconto).
+          const totals = computeOrderTotals(updatedServices, order.quote?.discount ?? 0);
 
           return {
             ...order,
             services: updatedServices,
-            totalAmount: grandTotal,
-            quote: order.quote
-              ? {
-                  ...order.quote,
-                  laborTotal,
-                  partsTotal,
-                  grandTotal: grandTotal - (order.quote.discount || 0),
-                }
-              : order.quote,
+            totalAmount: totals.grandTotal,
+            quote: order.quote ? { ...order.quote, ...totals } : order.quote,
           };
         })
       );
@@ -757,12 +748,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({
       const clientTrackingToken = `${tokenInitials}-${nextNumber}-${Math.floor(10 + Math.random() * 90)}`;
 
       const services = orderData.services || [];
-      const laborTotal = services.reduce((acc, s) => acc + s.laborPrice, 0);
-      const partsTotal = services.reduce(
-        (acc, s) => acc + s.partsUsed.reduce((pAcc, p) => pAcc + p.unitPrice * p.quantity, 0),
-        0
-      );
-      const totalAmount = laborTotal + partsTotal;
+      const totals = computeOrderTotals(services);
+      const totalAmount = totals.grandTotal;
 
       const newOrder: Order = {
         id: 'ord-' + nextNumber,
@@ -781,12 +768,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({
         quote: {
           id: 'qt-' + nextNumber,
           orderId: 'ord-' + nextNumber,
-          laborTotal,
-          partsTotal,
-          discount: 0,
-          grandTotal: totalAmount,
+          ...totals,
           status: 'pendente',
-          paymentTerms: '50% entrada + 50% na entrega',
+          paymentTerms: DEFAULT_PAYMENT_TERMS,
         },
         photos: orderData.photos || [],
         timeline: [

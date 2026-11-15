@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { OrderStatus } from '../../types';
 import { canApproveQuote } from '../../domain/orderRules';
+import { computeOrderTotals, servicePartsTotal } from '../../domain/totals';
 
 export const ClientPortalView: React.FC = () => {
   const { user, requestReauthentication } = useAuth();
@@ -78,6 +79,7 @@ export const ClientPortalView: React.FC = () => {
   ];
 
   const currentStepIdx = steps.findIndex((s) => s.status === order.status);
+  const quoteTotals = computeOrderTotals(order.services, order.quote?.discount ?? 0);
 
   const handleApprove = () => {
     triggerHaptic();
@@ -244,16 +246,25 @@ export const ClientPortalView: React.FC = () => {
           </p>
 
           <div className="p-3 rounded-2xl bg-stone-950 border border-stone-800 space-y-2 text-xs">
+            {/* Mão de obra + peças por serviço: a soma bate com o total (antes só mostrava a mão de obra) */}
             {order.services.map((s) => (
               <div key={s.id} className="flex justify-between text-stone-300">
                 <span className="truncate pr-2">• {s.title}</span>
-                <span className="font-semibold text-white">R$ {s.laborPrice.toFixed(2)}</span>
+                <span className="font-semibold text-white">
+                  R$ {(s.laborPrice + servicePartsTotal(s)).toFixed(2)}
+                </span>
               </div>
             ))}
+            {quoteTotals.discount > 0 && (
+              <div className="flex justify-between text-emerald-400">
+                <span>Desconto:</span>
+                <span>- R$ {quoteTotals.discount.toFixed(2)}</span>
+              </div>
+            )}
             <div className="pt-2 border-t border-stone-800 flex justify-between font-black text-sm text-white">
               <span>Total Orçado:</span>
               <span className="text-amber-400 font-mono">
-                R$ {order.totalAmount.toFixed(2)}
+                R$ {quoteTotals.grandTotal.toFixed(2)}
               </span>
             </div>
           </div>
