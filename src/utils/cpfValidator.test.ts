@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cleanCpf, formatCpf, isValidCpf, maskCpf } from './cpfValidator';
+import { cleanCpf, formatCpf, isValidCpf, maskCpf, matchesCpfQuery } from './cpfValidator';
 
 describe('isValidCpf', () => {
   it('aceita CPFs com dígitos verificadores corretos, com ou sem máscara', () => {
@@ -38,6 +38,18 @@ describe('maskCpf', () => {
 
   it('devolve máscara cega para CPF incompleto', () => {
     expect(maskCpf('123')).toBe('***.***.***-**');
+  });
+});
+
+describe('matchesCpfQuery', () => {
+  it('casa pelos dígitos, com ou sem máscara', () => {
+    expect(matchesCpfQuery('321.654.987-91', '32165')).toBe(true);
+    expect(matchesCpfQuery('321.654.987-91', '654.987')).toBe(true);
+  });
+
+  it('não casa busca sem dígitos nem cliente sem CPF', () => {
+    expect(matchesCpfQuery('321.654.987-91', 'lucas')).toBe(false);
+    expect(matchesCpfQuery(undefined, '321')).toBe(false);
   });
 });
 

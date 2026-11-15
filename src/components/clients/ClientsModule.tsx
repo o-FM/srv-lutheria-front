@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { formatCpf, isValidCpf, maskCpf, matchesCpfQuery } from '../../utils/cpfValidator';
 import {
   Users,
   Search,
@@ -58,7 +59,7 @@ export const ClientsModule: React.FC = () => {
     return (
       c.name.toLowerCase().includes(q) ||
       c.phone.includes(q) ||
-      (c.cpf && c.cpf.includes(q))
+      matchesCpfQuery(c.cpf, q)
     );
   });
 
@@ -75,19 +76,21 @@ export const ClientsModule: React.FC = () => {
   };
 
   const handleCpfFormat = (val: string) => {
-    const digits = val.replace(/\D/g, '').slice(0, 11);
-    let formatted = digits;
-    if (digits.length > 3) formatted = `${digits.slice(0, 3)}.${digits.slice(3)}`;
-    if (digits.length > 6) formatted = `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
-    if (digits.length > 9)
-      formatted = `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
-    setCpf(formatted);
+    setCpf(formatCpf(val));
   };
 
   const handleCreateClient = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
       showToast({ title: 'Informe o nome do cliente', type: 'warning' });
+      return;
+    }
+    if (cpf.trim() && !isValidCpf(cpf)) {
+      showToast({
+        title: 'CPF inválido',
+        description: 'Confira os dígitos ou deixe o campo em branco.',
+        type: 'error',
+      });
       return;
     }
     triggerHaptic();
@@ -305,7 +308,7 @@ export const ClientsModule: React.FC = () => {
                     <p className="text-xs text-stone-400">{selectedClient.email}</p>
                     {selectedClient.cpf && (
                       <p className="text-[11px] text-stone-500 font-mono mt-0.5">
-                        CPF: {selectedClient.cpf}
+                        CPF: {maskCpf(selectedClient.cpf)}
                       </p>
                     )}
                   </div>

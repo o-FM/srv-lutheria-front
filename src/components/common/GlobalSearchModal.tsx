@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
+import { matchesCpfQuery } from '../../utils/cpfValidator';
 import {
   Search,
   X,
@@ -51,7 +52,7 @@ export const GlobalSearchModal: React.FC = () => {
       (c) =>
         c.name.toLowerCase().includes(q) ||
         c.phone.includes(q) ||
-        (c.cpf && c.cpf.includes(q))
+        matchesCpfQuery(c.cpf, q)
     );
 
     const matchedInstruments = instruments.filter(
