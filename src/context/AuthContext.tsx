@@ -8,7 +8,37 @@ import React, {
 } from 'react';
 import { AuthUser, authApi } from '../services/authApi';
 import { UserRole } from '../types';
-import { readJson, readString } from '../utils/storage';
+import {
+  BUSINESS_DATA_KEYS,
+  readJson,
+  readString,
+  removeKeys,
+  writeJson,
+  writeString,
+} from '../utils/storage';
+
+const AUTH_KEYS = ['luthier_auth_token', 'luthier_auth_user'] as const;
+
+/** Remove a sessão das duas storages. */
+function clearStoredSession(): void {
+  removeKeys(AUTH_KEYS);
+  removeKeys(AUTH_KEYS, sessionStorage);
+}
+
+/** Grava a sessão em uma única storage (local = "manter conectado"). */
+function persistSession(token: string, user: AuthUser, remember: boolean): void {
+  clearStoredSession();
+  const store = remember ? localStorage : sessionStorage;
+  writeString('luthier_auth_token', token, store);
+  writeJson('luthier_auth_user', user, store);
+}
+
+/** Apaga os dados de negócio do aparelho (no mock, voltam às seeds no próximo login). */
+function clearBusinessData(): void {
+  removeKeys(BUSINESS_DATA_KEYS);
+}
+
+const isRememberedSession = (): boolean => readString('luthier_auth_token') !== null;
 
 const ROLES: readonly string[] = ['luthier', 'atendente', 'cliente'];
 
@@ -103,10 +133,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       } catch {
         // Token expired or invalid
         if (isMounted) {
-          localStorage.removeItem('luthier_auth_token');
-          sessionStorage.removeItem('luthier_auth_token');
-          localStorage.removeItem('luthier_auth_user');
-          sessionStorage.removeItem('luthier_auth_user');
+          clearStoredSession();
+          clearBusinessData();
           setToken(null);
           setUser(null);
           setIsLoading(false);
@@ -146,17 +174,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const login = useCallback(
     async (identifier: string, pass: string, remember: boolean): Promise<AuthUser> => {
       const res = await authApi.login(identifier, pass, remember);
+      persistSession(res.token, res.user, remember);
       setToken(res.token);
       setUser(res.user);
-
-      if (remember) {
-        localStorage.setItem('luthier_auth_token', res.token);
-        localStorage.setItem('luthier_auth_user', JSON.stringify(res.user));
-      } else {
-        sessionStorage.setItem('luthier_auth_token', res.token);
-        sessionStorage.setItem('luthier_auth_user', JSON.stringify(res.user));
-      }
-
       return res.user;
     },
     []
@@ -164,12 +184,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const logout = useCallback(async () => {
     if (token) {
-      await authApi.logout(token);
+      try {
+        await authApi.logout(token);
+      } catch {
+        // Sem rede ou sessão já expirada: o logout local acontece mesmo assim.
+      }
     }
-    localStorage.removeItem('luthier_auth_token');
-    sessionStorage.removeItem('luthier_auth_token');
-    localStorage.removeItem('luthier_auth_user');
-    sessionStorage.removeItem('luthier_auth_user');
+    clearStoredSession();
+    clearBusinessData();
     setToken(null);
     setUser(null);
     setIsAccountSettingsOpen(false);
@@ -226,13 +248,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       const res = await authApi.switchProfile(token, ticket);
 
-      // Clean local storage cache, offline queues, and draft state to prevent leakage between roles
-      localStorage.removeItem('luthier_os_wizard_draft');
+      // Rascunho do wizard é do usuário anterior: não pode vazar para o novo perfil.
+      removeKeys(['luthier_os_wizard_draft']);
 
+      // Mantém a sessão na mesma storage em que estava ("manter conectado" continua valendo).
+      persistSession(res.token, res.user, isRememberedSession());
       setToken(res.token);
       setUser(res.user);
-      sessionStorage.setItem('luthier_auth_token', res.token);
-      sessionStorage.setItem('luthier_auth_user', JSON.stringify(res.user));
 
       return res.user;
     },
@@ -241,11 +263,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const updateUserInMemory = useCallback((updated: AuthUser) => {
     setUser(updated);
-    if (localStorage.getItem('luthier_auth_user')) {
-      localStorage.setItem('luthier_auth_user', JSON.stringify(updated));
+    if (readString('luthier_auth_user') !== null) {
+      writeJson('luthier_auth_user', updated);
     }
-    if (sessionStorage.getItem('luthier_auth_user')) {
-      sessionStorage.setItem('luthier_auth_user', JSON.stringify(updated));
+    if (readString('luthier_auth_user', sessionStorage) !== null) {
+      writeJson('luthier_auth_user', updated, sessionStorage);
     }
   }, []);
 

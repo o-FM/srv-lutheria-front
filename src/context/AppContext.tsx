@@ -123,7 +123,19 @@ const STATUS_DESCRIPTIONS: Record<OrderStatus, string> = {
   cancelado: 'Ordem de serviço cancelada',
 };
 
-export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+interface AppProviderProps {
+  children: ReactNode;
+  /** Papel do usuário logado. O provider é remontado (key) a cada troca de usuário. */
+  initialRole?: UserRole;
+  /** Sem usuário logado, nada é gravado no aparelho (o logout apagou os dados). */
+  isPersistenceEnabled?: boolean;
+}
+
+export const AppProvider: React.FC<AppProviderProps> = ({
+  children,
+  initialRole = 'luthier',
+  isPersistenceEnabled = true,
+}) => {
   // Load from localStorage or seed (JSON corrompido volta para as seeds)
   const [clients, setClients] = useState<Client[]>(() =>
     readJson('luthier_clients', INITIAL_CLIENTS, isArray<Client>)
@@ -150,7 +162,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   );
 
   // UI state
-  const [currentRole, setRoleState] = useState<UserRole>('luthier');
+  const [currentRole, setRoleState] = useState<UserRole>(initialRole);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('online');
   const [offlineQueueCount, setOfflineQueueCount] = useState<number>(0);
   const [activeTab, setActiveTab] = useState<string>('hoje');
@@ -217,6 +229,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const storageWarnedRef = useRef(false);
   const persist = useCallback(
     (key: string, value: unknown) => {
+      if (!isPersistenceEnabled) return;
       if (writeJson(key, value)) {
         storageWarnedRef.current = false;
         return;
@@ -230,7 +243,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         duration: 8000,
       });
     },
-    [showToast]
+    [showToast, isPersistenceEnabled]
   );
 
   useEffect(() => persist('luthier_clients', clients), [persist, clients]);

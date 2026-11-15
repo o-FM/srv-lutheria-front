@@ -1,6 +1,6 @@
 import React from 'react';
 import { AppProvider, useApp } from './context/AppContext';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { AuthGuard } from './components/auth/AuthGuard';
 import { Header } from './components/common/Header';
 import { BottomTabBar } from './components/common/BottomTabBar';
@@ -69,14 +69,29 @@ const MainLayout: React.FC = () => {
   );
 };
 
+// Remonta o contexto de dados a cada troca de usuário: o estado em memória de um
+// usuário (OS aberta, busca, modais, dados após logout) nunca passa para o próximo.
+const AppProviderKeyed: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
+  return (
+    <AppProvider
+      key={user?.id ?? 'anon'}
+      initialRole={user?.role ?? 'luthier'}
+      isPersistenceEnabled={!!user}
+    >
+      {children}
+    </AppProvider>
+  );
+};
+
 export default function App() {
   return (
     <AuthProvider>
-      <AppProvider>
+      <AppProviderKeyed>
         <AuthGuard>
           <MainLayout />
         </AuthGuard>
-      </AppProvider>
+      </AppProviderKeyed>
     </AuthProvider>
   );
 }
