@@ -159,7 +159,7 @@ export const AccountSettingsModal: React.FC = () => {
             </div>
           )}
 
-          {!showLogs ? (
+          {!showLogs || user.role !== 'luthier' ? (
             <form onSubmit={handleSave} className="space-y-3.5">
               <p className="text-xs text-stone-400">
                 Qualquer alteração em e-mail, telefone ou senha exigirá <strong>reautenticação obrigatória</strong> com identificação e senha atual.

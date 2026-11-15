@@ -23,7 +23,8 @@ import { ForgotPasswordModal } from './components/auth/ForgotPasswordModal';
 import { getRolePermissions } from './utils/permissions';
 
 const MainLayout: React.FC = () => {
-  const { activeTab, setActiveTab, currentRole } = useApp();
+  const { activeTab, setActiveTab, currentRole, activeOrderId } = useApp();
+  const { user } = useAuth();
 
   // Redirect away from restricted tabs
   React.useEffect(() => {
@@ -56,7 +57,8 @@ const MainLayout: React.FC = () => {
       <BottomTabBar />
 
       {/* Global Modals & Sheets */}
-      <OrderDetailSheet />
+      {/* key: abrir outra OS recomeça na aba "Serviços", sem formulários de outra OS */}
+      <OrderDetailSheet key={activeOrderId ?? 'none'} />
       <NewOrderWizardModal />
       <WorkbenchModeModal />
       <CameraModal />
@@ -64,7 +66,8 @@ const MainLayout: React.FC = () => {
       <GlobalSearchModal />
       <ToastContainer />
       <ReauthBottomSheet />
-      <AccountSettingsModal />
+      {/* key: os campos da Conta sempre começam com os dados do usuário atual */}
+      <AccountSettingsModal key={user?.id ?? 'anon'} />
       <ForgotPasswordModal />
     </div>
   );
