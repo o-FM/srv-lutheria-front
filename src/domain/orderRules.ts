@@ -89,6 +89,12 @@ export interface PartDeduction {
   quantity: number;
 }
 
+/** Saldo a receber da OS (total − pago), em reais, nunca negativo. */
+export function remainingBalance(order: Order): number {
+  const cents = Math.round((order.totalAmount - (order.paidAmount || 0)) * 100);
+  return Math.max(0, cents) / 100;
+}
+
 /** Orçamento pendente a partir dos serviços da OS (para OS antigas sem orçamento). */
 export function buildPendingQuote(order: Order): Quote {
   const laborTotal = order.services.reduce((acc, s) => acc + s.laborPrice, 0);

@@ -7,6 +7,7 @@ import {
   isPartsDeducted,
   nextStatus,
   partsToDeduct,
+  remainingBalance,
 } from './orderRules';
 
 function makeOrder(status: OrderStatus, overrides: Partial<Order> = {}): Order {
@@ -154,6 +155,17 @@ describe('buildPendingQuote', () => {
       grandTotal: 160,
       status: 'pendente',
     });
+  });
+});
+
+describe('remainingBalance', () => {
+  it('é o total menos o pago, nunca negativo', () => {
+    expect(remainingBalance(makeOrder('pronto', { totalAmount: 500, paidAmount: 200 }))).toBe(300);
+    expect(remainingBalance(makeOrder('pronto', { totalAmount: 500, paidAmount: 600 }))).toBe(0);
+  });
+
+  it('arredonda centavos para evitar resíduo de ponto flutuante', () => {
+    expect(remainingBalance(makeOrder('pronto', { totalAmount: 0.3, paidAmount: 0.1 }))).toBe(0.2);
   });
 });
 

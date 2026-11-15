@@ -24,6 +24,7 @@ export const OrdersModule: React.FC = () => {
     currentRole,
     setActiveOrderId,
     advanceOrderStatus,
+    deliverOrder,
     setIsNewOrderWizardOpen,
     triggerHaptic,
   } = useApp();
@@ -292,7 +293,7 @@ export const OrdersModule: React.FC = () => {
                           type="button"
                           onClick={() => {
                             triggerHaptic();
-                            advanceOrderStatus(ord.id, 'entregue', 'Entregue no balcão de atendimento');
+                            deliverOrder(ord.id, 'Entregue no balcão de atendimento');
                           }}
                           className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-sm active:scale-95 transition-all"
                         >

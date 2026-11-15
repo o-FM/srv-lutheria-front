@@ -42,6 +42,7 @@ import {
   isPartsDeducted,
   nextStatus,
   partsToDeduct,
+  remainingBalance,
 } from '../domain/orderRules';
 
 interface AppContextType {
@@ -60,6 +61,8 @@ interface AppContextType {
   recentSearches: string[];
   isSearchOpen: boolean;
   activeOrderId: string | null;
+  /** Pedido para a OS aberta mostrar o formulário de pagamento (consumido pelo sheet). */
+  orderSheetFocus: 'pagamento' | null;
   isNewOrderWizardOpen: boolean;
   isWorkbenchModeOpen: boolean;
   isDarkMode: boolean;
@@ -79,6 +82,7 @@ interface AppContextType {
   clearRecentSearches: () => void;
   setIsSearchOpen: (open: boolean) => void;
   setActiveOrderId: (id: string | null) => void;
+  setOrderSheetFocus: (focus: 'pagamento' | null) => void;
   setIsNewOrderWizardOpen: (open: boolean) => void;
   setIsWorkbenchModeOpen: (open: boolean) => void;
   toggleDarkMode: () => void;
@@ -97,6 +101,8 @@ interface AppContextType {
   toggleServiceDone: (orderId: string, serviceId: string) => void;
   addOrderPhoto: (orderId: string, photo: Omit<Photo, 'id' | 'timestamp'>) => void;
   approveQuote: (orderId: string) => void;
+  /** Entrega a OS. Com saldo em aberto, não entrega: abre a OS no pagamento. */
+  deliverOrder: (orderId: string, note?: string) => void;
   rejectQuote: (orderId: string, reason: string) => void;
 
   createClient: (clientData: Omit<Client, 'id' | 'createdAt'>) => Client;
@@ -185,6 +191,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({
   ]);
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
+  const [orderSheetFocus, setOrderSheetFocus] = useState<'pagamento' | null>(null);
   const [isNewOrderWizardOpen, setIsNewOrderWizardOpen] = useState<boolean>(false);
   const [isWorkbenchModeOpen, setIsWorkbenchModeOpen] = useState<boolean>(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -427,6 +434,19 @@ export const AppProvider: React.FC<AppProviderProps> = ({
         return;
       }
 
+      // Entrega com saldo em aberto: primeiro o pagamento (abre a OS no formulário).
+      const balance = remainingBalance(order);
+      if (target === 'entregue' && balance > 0) {
+        showToast({
+          title: 'Registre o pagamento antes da entrega',
+          description: `Saldo em aberto: R$ ${balance.toFixed(2)}.`,
+          type: 'warning',
+        });
+        setActiveOrderId(orderId);
+        setOrderSheetFocus('pagamento');
+        return;
+      }
+
       const alreadyDeducted = isPartsDeducted(order);
       const deductNow = target === 'em_execucao' && !alreadyDeducted;
 
@@ -500,6 +520,14 @@ export const AppProvider: React.FC<AppProviderProps> = ({
       }
     },
     [currentRole, triggerHaptic, showToast, commitOrder, deductParts, syncStatus]
+  );
+
+  const deliverOrder = useCallback(
+    (orderId: string, note = 'Entregue ao cliente no balcão') => {
+      if (!denyUnless(permissions.canRegisterDelivery, 'Registrar entrega')) return;
+      advanceOrderStatus(orderId, 'entregue', note);
+    },
+    [advanceOrderStatus, denyUnless, permissions.canRegisterDelivery]
   );
 
   const updateOrder = useCallback((orderId: string, updates: Partial<Order>) => {
@@ -968,6 +996,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({
         toggleServiceDone,
         addOrderPhoto,
         approveQuote,
+        deliverOrder,
+        orderSheetFocus,
+        setOrderSheetFocus,
         rejectQuote,
         createClient,
         createInstrument,

@@ -31,6 +31,7 @@ export const HomeModule: React.FC = () => {
     openCamera,
     addOrderPhoto,
     advanceOrderStatus,
+    deliverOrder,
     triggerHaptic,
   } = useApp();
 
@@ -394,7 +395,7 @@ export const HomeModule: React.FC = () => {
                       type="button"
                       onClick={() => {
                         triggerHaptic();
-                        advanceOrderStatus(ord.id, 'entregue', 'Entregue no balcão de atendimento');
+                        deliverOrder(ord.id, 'Entregue no balcão de atendimento');
                       }}
                       className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1 active:scale-95 transition-all shadow-sm"
                     >

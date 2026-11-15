@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import {
   X,
@@ -23,7 +23,7 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import { OrderStatus, ServiceItem } from '../../types';
-import { canApproveQuote } from '../../domain/orderRules';
+import { canApproveQuote, remainingBalance } from '../../domain/orderRules';
 import { usePermissions } from '../../hooks/usePermissions';
 
 const STATUS_STEPS: { status: OrderStatus; label: string }[] = [
@@ -52,6 +52,9 @@ export const OrderDetailSheet: React.FC = () => {
     addOrderPhoto,
     approveQuote,
     recordPayment,
+    deliverOrder,
+    orderSheetFocus,
+    setOrderSheetFocus,
     triggerHaptic,
     showToast,
   } = useApp();
@@ -66,6 +69,16 @@ export const OrderDetailSheet: React.FC = () => {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'pix' | 'cartao_credito' | 'dinheiro'>('pix');
+
+  // Entrega bloqueada por saldo (Home, lista ou bancada): abre direto no pagamento.
+  useEffect(() => {
+    if (orderSheetFocus !== 'pagamento') return;
+    setOrderSheetFocus(null);
+    const target = orders.find((o) => o.id === activeOrderId);
+    setActiveTab('orcamento');
+    setPaymentAmount(target ? remainingBalance(target).toFixed(2) : '');
+    setIsPaymentModalOpen(true);
+  }, [orderSheetFocus, setOrderSheetFocus, orders, activeOrderId]);
 
   if (!activeOrderId) return null;
 
@@ -119,17 +132,9 @@ export const OrderDetailSheet: React.FC = () => {
       return;
     }
 
-    // Atendente: Allowed to deliver when ready
+    // Atendente: entrega quando está pronto (com saldo, o pagamento vem antes)
     if (targetStatus === 'entregue' && order.status === 'pronto') {
-      advanceOrderStatus(order.id, 'entregue', 'Entregue ao cliente no balcão de recepção');
-      showToast({
-        title: 'Entrega Registrada!',
-        description: 'Instrumento entregue ao cliente com sucesso.',
-        type: 'success',
-      });
-      if (remainingBalance > 0) {
-        setIsPaymentModalOpen(true);
-      }
+      deliverOrder(order.id, 'Entregue ao cliente no balcão de recepção');
       return;
     }
 
@@ -150,9 +155,18 @@ export const OrderDetailSheet: React.FC = () => {
   };
 
   const handleSavePayment = () => {
-    const val = parseFloat(paymentAmount);
+    const val = parseFloat(paymentAmount.replace(',', '.'));
     if (!val || val <= 0) {
       showToast({ title: 'Informe um valor válido', type: 'warning' });
+      return;
+    }
+    if (val > balanceDue) {
+      showToast({
+        title: 'Valor maior que o saldo',
+        description: `Saldo em aberto: R$ ${balanceDue.toFixed(2)}.`,
+        type: 'warning',
+      });
+      setPaymentAmount(balanceDue.toFixed(2));
       return;
     }
     recordPayment({
@@ -170,7 +184,7 @@ export const OrderDetailSheet: React.FC = () => {
     setPaymentAmount('');
   };
 
-  const remainingBalance = Math.max(0, order.totalAmount - (order.paidAmount || 0));
+  const balanceDue = remainingBalance(order);
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 backdrop-blur-sm animate-in fade-in">
@@ -541,7 +555,7 @@ export const OrderDetailSheet: React.FC = () => {
                   <div className="flex justify-between text-xs text-stone-400">
                     <span>Saldo Restante:</span>
                     <span className="text-rose-400 font-mono font-semibold">
-                      R$ {remainingBalance.toFixed(2)}
+                      R$ {balanceDue.toFixed(2)}
                     </span>
                   </div>
                 </div>
@@ -579,7 +593,7 @@ export const OrderDetailSheet: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      setPaymentAmount(remainingBalance > 0 ? remainingBalance.toString() : '100');
+                      setPaymentAmount(balanceDue > 0 ? balanceDue.toFixed(2) : '');
                       setIsPaymentModalOpen(true);
                     }}
                     className="text-xs text-amber-400 font-semibold hover:text-amber-300 flex items-center gap-1"
@@ -704,15 +718,7 @@ export const OrderDetailSheet: React.FC = () => {
                 type="button"
                 onClick={() => {
                   triggerHaptic();
-                  advanceOrderStatus(order.id, 'entregue', 'Entregue ao cliente no balcão de recepção');
-                  showToast({
-                    title: 'Entrega Registrada!',
-                    description: 'Instrumento entregue ao cliente com sucesso.',
-                    type: 'success',
-                  });
-                  if (remainingBalance > 0) {
-                    setIsPaymentModalOpen(true);
-                  }
+                  deliverOrder(order.id, 'Entregue ao cliente no balcão de recepção');
                 }}
                 className="flex-1 py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/80 active:scale-95 transition-all"
               >
