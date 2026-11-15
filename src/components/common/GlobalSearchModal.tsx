@@ -25,6 +25,7 @@ export const GlobalSearchModal: React.FC = () => {
     addRecentSearch,
     clearRecentSearches,
     setActiveOrderId,
+    setActiveClientId,
     setActiveTab,
     triggerHaptic,
   } = useApp();
@@ -99,6 +100,7 @@ export const GlobalSearchModal: React.FC = () => {
   const handleSelectClient = (clientId: string) => {
     triggerHaptic();
     addRecentSearch(term);
+    setActiveClientId(clientId);
     setActiveTab('clientes');
     setIsSearchOpen(false);
   };
@@ -253,6 +255,40 @@ export const GlobalSearchModal: React.FC = () => {
                       <ArrowRight className="w-4 h-4 text-stone-500 group-hover:text-amber-400 shrink-0" />
                     </button>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {/* Instruments: o toque abre a ficha do cliente dono */}
+            {searchResults && searchResults.instruments.length > 0 && (
+              <div className="space-y-2">
+                <span className="text-[11px] font-bold text-amber-500 uppercase tracking-wider flex items-center gap-1.5">
+                  <Guitar className="w-3.5 h-3.5" />
+                  Instrumentos ({searchResults.instruments.length})
+                </span>
+                <div className="space-y-1.5">
+                  {searchResults.instruments.map((inst) => {
+                    const owner = clients.find((c) => c.id === inst.clientId);
+                    return (
+                      <button
+                        key={inst.id}
+                        type="button"
+                        onClick={() => handleSelectClient(inst.clientId)}
+                        className="w-full flex items-center justify-between p-3 rounded-xl bg-stone-800/80 hover:bg-stone-800 border border-stone-700/60 text-left transition-colors group"
+                      >
+                        <div>
+                          <p className="text-xs font-bold text-white">
+                            {inst.brand} {inst.model}
+                          </p>
+                          <p className="text-[11px] text-stone-400 mt-0.5">
+                            {owner?.name ?? 'Cliente não encontrado'}
+                            {inst.serialNumber ? ` · Série ${inst.serialNumber}` : ''}
+                          </p>
+                        </div>
+                        <ArrowRight className="w-4 h-4 text-stone-500 group-hover:text-amber-400 shrink-0" />
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}

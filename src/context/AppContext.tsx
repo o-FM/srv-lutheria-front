@@ -63,6 +63,8 @@ interface AppContextType {
   activeOrderId: string | null;
   /** Pedido para a OS aberta mostrar o formulário de pagamento (consumido pelo sheet). */
   orderSheetFocus: 'pagamento' | null;
+  /** Ficha de cliente aberta na aba Clientes (também usada pela busca global). */
+  activeClientId: string | null;
   isNewOrderWizardOpen: boolean;
   isWorkbenchModeOpen: boolean;
   isDarkMode: boolean;
@@ -83,6 +85,7 @@ interface AppContextType {
   setIsSearchOpen: (open: boolean) => void;
   setActiveOrderId: (id: string | null) => void;
   setOrderSheetFocus: (focus: 'pagamento' | null) => void;
+  setActiveClientId: (id: string | null) => void;
   setIsNewOrderWizardOpen: (open: boolean) => void;
   setIsWorkbenchModeOpen: (open: boolean) => void;
   toggleDarkMode: () => void;
@@ -192,6 +195,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
   const [orderSheetFocus, setOrderSheetFocus] = useState<'pagamento' | null>(null);
+  const [activeClientId, setActiveClientId] = useState<string | null>(null);
   const [isNewOrderWizardOpen, setIsNewOrderWizardOpen] = useState<boolean>(false);
   const [isWorkbenchModeOpen, setIsWorkbenchModeOpen] = useState<boolean>(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -999,6 +1003,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({
         deliverOrder,
         orderSheetFocus,
         setOrderSheetFocus,
+        activeClientId,
+        setActiveClientId,
         rejectQuote,
         createClient,
         createInstrument,

@@ -30,10 +30,12 @@ export const ClientsModule: React.FC = () => {
     setIsNewOrderWizardOpen,
     triggerHaptic,
     showToast,
+    // A ficha aberta vem do contexto: a busca global consegue abrir um cliente.
+    activeClientId: selectedClientId,
+    setActiveClientId: setSelectedClientId,
   } = useApp();
 
   const [search, setSearch] = useState('');
-  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
 
   // New Client Form
   const [isNewClientOpen, setIsNewClientOpen] = useState(false);
